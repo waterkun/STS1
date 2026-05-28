@@ -281,4 +281,7 @@ cython_debug/
 poetry.toml
 
 
+# Ironclad advisor generated database (rebuilt from run files)
+ironclad_advisor/db/
+
 # End of https://www.toptal.com/developers/gitignore/api/python,pycharm
