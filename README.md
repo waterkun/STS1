@@ -44,3 +44,4 @@ python analyze/analyze.py  --help
 # Example usage
 python analyze/analyze.py <path to run history folder> <path to results output folder>
 ```
+# STS1
