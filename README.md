@@ -40,7 +40,7 @@
 
 ### 模型架构
 
-项目包含两代模型（V1 + V2），推理时综合所有模型的 Borda 排名给出最终建议。
+项目包含三代模型（V1 + V2 + V3），推理时综合所有模型的 Borda 排名给出最终建议。
 
 | 模型 | 类型 | 说明 |
 |------|------|------|
@@ -49,6 +49,9 @@
 | **LambdaMART** (V2) | 排序模型 (LGBMRanker) | 直接优化选项排序，标签 2=选了且赢/1=选了且输/0=没选 |
 | **Logistic Regression** (V2) | 选择模型 | 学习「高手倾向选什么」，Pipeline(Imputer+Scaler+LogReg) |
 | **CWR-Delta** (V2) | 纯统计 | 条件胜率差异 + 贝叶斯平滑，按 act × deck_size × context 分桶 |
+| **Transformer** (V3) | 集合排序模型 | 纯 NumPy 实现的自注意力编码器，候选选项互相感知，ListNet 损失 |
+
+**V3 与 V1/V2 的核心区别**：V1/V2 对每个候选选项独立打分，无法感知同一决策中其他候选项的存在。V3 通过自注意力机制让每个选项的评分受整个候选集影响，从而捕捉选项间的协同与机会成本（例如：当 Barricade 也在奖励中时，Feel No Pain 的价值更高）。
 
 ### 特征工程
 
@@ -60,6 +63,8 @@
 - **卡组升级向量** (~400维) — 记录每张卡被升级的次数
 
 V2 额外特征：卡组攻击/技能/能力占比、候选卡在卡组中已有数量、机制关键词组计数、流派匹配得分、synergy 协同得分。
+
+V3 使用与 V2 完全相同的特征向量，但通过自注意力机制在选项之间共享信息，而非独立评分。
 
 推理后处理：对卡组中已有的能力牌（Power）施加重复惩罚（×0.5），避免推荐无意义的重复能力牌。
 
@@ -98,14 +103,17 @@ python -m watcher_advisor.build_db
 # 铁甲战士
 python -m ironclad_advisor.ml_advisor train
 python -m ironclad_advisor.ml_advisor_v2 train
+python -m ironclad_advisor.ml_advisor_v3 train
 
 # 静默猎手
 python -m silent_advisor.ml_advisor train
 python -m silent_advisor.ml_advisor_v2 train
+python -m silent_advisor.ml_advisor_v3 train
 
 # 观者
 python -m watcher_advisor.ml_advisor train
 python -m watcher_advisor.ml_advisor_v2 train
+python -m watcher_advisor.ml_advisor_v3 train
 ```
 
 ### CLI 推理
@@ -120,6 +128,13 @@ python -m ironclad_advisor.ml_advisor card \
 
 # 卡牌奖励建议 (V2 综合)
 python -m ironclad_advisor.ml_advisor_v2 card \
+  --floor 8 --act 1 --hp 45 --max-hp 80 \
+  --relics "Burning Blood,Bag of Marbles" \
+  --deck "Strike_R x4,Defend_R x4,Bash,Iron Wave,Shrug It Off" \
+  --options "Barricade,Feel No Pain,Pommel Strike"
+
+# 卡牌奖励建议 (V3 Transformer)
+python -m ironclad_advisor.ml_advisor_v3 card \
   --floor 8 --act 1 --hp 45 --max-hp 80 \
   --relics "Burning Blood,Bag of Marbles" \
   --deck "Strike_R x4,Defend_R x4,Bash,Iron Wave,Shrug It Off" \
@@ -163,10 +178,12 @@ python -m watcher_advisor.communicate
 
 ```
 STS1/
+├── transformer_core.py     # V3 共享核心：纯 NumPy Transformer（三角色共用）
 ├── ironclad_advisor/       # 铁甲战士 ML 顾问
 │   ├── build_db.py         # 决策数据库构建（解析 .run 文件）
 │   ├── ml_advisor.py       # V1 模型：XGBoost + LightGBM 二分类
 │   ├── ml_advisor_v2.py    # V2 模型：LambdaMART + LogReg + CWR
+│   ├── ml_advisor_v3.py    # V3 模型：Transformer 自注意力排序
 │   ├── communicate.py      # CommunicationMod 实时集成
 │   ├── db/                 # 生成的决策数据库 (JSON)
 │   └── models/             # 训练好的模型 (pickle)
@@ -174,6 +191,7 @@ STS1/
 │   ├── build_db.py         # 过滤 THE_SILENT，基础牌组 Strike_G/Defend_G
 │   ├── ml_advisor.py
 │   ├── ml_advisor_v2.py    # 毒/弃牌/小刀/格挡 synergy
+│   ├── ml_advisor_v3.py    # V3 Transformer
 │   ├── communicate.py
 │   ├── db/
 │   └── models/
@@ -181,6 +199,7 @@ STS1/
 │   ├── build_db.py         # 过滤 WATCHER，基础牌组 Strike_P/Defend_P
 │   ├── ml_advisor.py
 │   ├── ml_advisor_v2.py    # 愤怒/冷静/神性/占卜 synergy
+│   ├── ml_advisor_v3.py    # V3 Transformer
 │   ├── communicate.py
 │   ├── db/
 │   └── models/
@@ -205,7 +224,7 @@ STS1/
 - **XGBoost** — V1 梯度提升分类器 (GPU)
 - **LightGBM** — V1 分类 + V2 LambdaMART 排序 (GPU)
 - **scikit-learn** — Logistic Regression、交叉验证、评估指标
-- **NumPy** — 特征编码与矩阵运算
+- **NumPy** — 特征编码与矩阵运算；V3 Transformer 的完整实现（前向/反向传播、Adam 优化器均纯 NumPy 手写，无框架依赖）
 - **Poetry** — 依赖管理
 
 ## 开发路线
@@ -216,6 +235,7 @@ STS1/
 - [ ] 机器人（Defect）AI 顾问
 - [x] 观者（Watcher）AI 顾问
 - [x] 重复能力牌惩罚机制
+- [x] V3 Transformer 模型（纯 NumPy 自注意力，候选选项互相感知）
 
 ## 许可证
 

@@ -122,9 +122,10 @@ _ENGINE_LABELS = {
     "lambdamart": "LambdaMR",
     "logreg": "LogReg",
     "cwr_delta": "CWR",
+    "transformer": "Transf.",
 }
 
-_ENGINE_ORDER = ["xgboost", "lightgbm", "lambdamart", "logreg", "cwr_delta"]
+_ENGINE_ORDER = ["xgboost", "lightgbm", "lambdamart", "logreg", "cwr_delta", "transformer"]
 
 _NAME_COL_WIDTH = 24
 
@@ -217,6 +218,16 @@ def handle_card_reward(gs, floor, act, hp_pct, deck, relics, ctx):
             ctx["num_upgrades"], ctx["deck_upgrades"])
         preds = ctx["predict_with_models"](ctx["v1_models"]["card"], X)
 
+    if ctx.get("v3_models") and "predict_v3_card" in ctx:
+        try:
+            preds_v3 = ctx["predict_v3_card"](
+                card_ids, floor, act, hp_pct, deck, relics,
+                ctx["db"], ctx["vocab"], ctx["v3_models"],
+                ctx["num_upgrades"], ctx["deck_upgrades"])
+            preds.update(preds_v3)
+        except Exception:
+            pass
+
     hp = gs.get("current_hp", 0)
     max_hp = gs.get("max_hp", 1)
     print_header(floor, act, hp, max_hp, "卡牌奖励")
@@ -234,6 +245,16 @@ def handle_campfire(gs, floor, act, hp_pct, deck, relics, ctx):
             floor, act, hp_pct, deck, relics, ctx["vocab"],
             ctx["num_upgrades"], ctx["deck_upgrades"])
         preds = ctx["predict_with_models"](ctx["v1_models"]["campfire"], X)
+
+    if ctx.get("v3_models") and "predict_v3_campfire" in ctx:
+        try:
+            preds_v3 = ctx["predict_v3_campfire"](
+                floor, act, hp_pct, deck, relics,
+                ctx["db"], ctx["vocab"], ctx["v3_models"],
+                ctx["num_upgrades"], ctx["deck_upgrades"])
+            preds.update(preds_v3)
+        except Exception:
+            pass
 
     hp = gs.get("current_hp", 0)
     max_hp = gs.get("max_hp", 1)
@@ -266,6 +287,16 @@ def handle_boss_relic(gs, act, hp_pct, deck, relics, ctx):
             relic_ids, stats, ctx["vocab"],
             ctx["num_upgrades"], ctx["deck_upgrades"])
         preds = ctx["predict_with_models"](ctx["v1_models"]["boss_relic"], X)
+
+    if ctx.get("v3_models") and "predict_v3_boss_relic" in ctx:
+        try:
+            preds_v3 = ctx["predict_v3_boss_relic"](
+                relic_ids, act, hp_pct, deck, relics,
+                ctx["db"], ctx["vocab"], ctx["v3_models"],
+                ctx["num_upgrades"], ctx["deck_upgrades"])
+            preds.update(preds_v3)
+        except Exception:
+            pass
 
     floor = gs.get("floor", 0)
     hp = gs.get("current_hp", 0)
@@ -317,6 +348,18 @@ def handle_shop(gs, floor, act, hp_pct, deck, relics, ctx):
             item_ids, stats, ctx["vocab"],
             ctx["num_upgrades"], ctx["deck_upgrades"])
         preds = ctx["predict_with_models"](ctx["v1_models"]["shop"], X)
+
+    if ctx.get("v3_models") and "predict_v3_shop" in ctx:
+        try:
+            id_labels = item_ids + ["不购买"]
+            preds_v3 = ctx["predict_v3_shop"](
+                id_labels, floor, act, hp_pct, gold,
+                deck, relics, item_ids,
+                ctx["db"], ctx["vocab"], ctx["v3_models"],
+                ctx["num_upgrades"], ctx["deck_upgrades"])
+            preds.update(preds_v3)
+        except Exception:
+            pass
 
     hp = gs.get("current_hp", 0)
     max_hp = gs.get("max_hp", 1)
@@ -375,12 +418,34 @@ def load_advisor(character: str) -> dict | None:
             log(f"[LOAD] {character} V2 模型加载失败:\n{traceback.format_exc()}")
             v2_models = None
 
+    # V3: Transformer 模型
+    v3_mod = None
+    try:
+        v3_mod = importlib.import_module(f"{pkg}.ml_advisor_v3")
+        log(f"[LOAD] {pkg}.ml_advisor_v3 导入成功")
+    except Exception:
+        log(f"[LOAD] {pkg}.ml_advisor_v3 导入失败 (跳过 V3):\n{traceback.format_exc()}")
+
+    v3_models = None
+    if v3_mod is not None:
+        try:
+            v3_models = v3_mod.load_v3_models()
+            if v3_models:
+                log(f"[LOAD] {character} V3 模型加载完毕: {list(v3_models.keys())}")
+            else:
+                log(f"[LOAD] {character} V3 模型文件不存在，跳过。")
+                v3_models = None
+        except Exception:
+            log(f"[LOAD] {character} V3 模型加载失败:\n{traceback.format_exc()}")
+            v3_models = None
+
     ctx = {
         "character": character,
         "db": db,
         "vocab": vocab,
         "v1_models": v1_models,
         "v2_models": v2_models,
+        "v3_models": v3_models,
         # v1 函数
         "predict_with_models": v1_mod.predict_with_models,
         "card_inference_features": v1_mod.card_inference_features,
@@ -395,6 +460,13 @@ def load_advisor(character: str) -> dict | None:
         ctx["predict_all_campfire"] = v2_mod.predict_all_campfire
         ctx["predict_all_boss_relic"] = v2_mod.predict_all_boss_relic
         ctx["predict_all_shop"] = v2_mod.predict_all_shop
+
+    # v3 函数（可能不存在）
+    if v3_mod is not None:
+        ctx["predict_v3_card"] = v3_mod.predict_all_card
+        ctx["predict_v3_campfire"] = v3_mod.predict_all_campfire
+        ctx["predict_v3_boss_relic"] = v3_mod.predict_all_boss_relic
+        ctx["predict_v3_shop"] = v3_mod.predict_all_shop
 
     log(f"[LOAD] {character} advisor 加载完毕。")
     return ctx
