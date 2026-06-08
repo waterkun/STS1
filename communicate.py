@@ -55,6 +55,7 @@ CHARACTER_MAP = {
     "IRONCLAD": "ironclad_advisor",
     "THE_SILENT": "silent_advisor",
     "WATCHER": "watcher_advisor",
+    "DEFECT": "defect_advisor",
 }
 
 # ---------------------------------------------------------------------------

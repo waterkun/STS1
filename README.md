@@ -2,7 +2,7 @@
 
 基于历史对局数据和 Claude AI 构建的杀戮尖塔决策辅助工具。通过分析大量高阶（A20）对局数据，为玩家在关键决策点提供实时建议。
 
-**当前支持角色：铁甲战士（Ironclad）、静默猎手（The Silent）、观者（Watcher）**
+**当前支持角色：铁甲战士（Ironclad）、静默猎手（The Silent）、机器人（Defect）、观者（Watcher）**
 
 ## 功能概览
 
@@ -30,13 +30,13 @@
 
 ### 训练数据
 
-| 指标 | 铁甲战士 | 静默猎手 | 观者 |
-|------|----------|----------|------|
-| 对局数 | 14,586 局 | 12,328 局 | 5,166 局 |
-| 卡牌决策样本 | 250,260 条 | 200,171 条 | 92,929 条 |
-| 篝火决策样本 | 80,759 条 | 66,884 条 | 29,938 条 |
-| Boss 遗物决策样本 | 16,185 条 | 12,870 条 | 6,423 条 |
-| 商店决策样本 | 706 条 | 602 条 | 543 条 |
+| 指标 | 铁甲战士 | 静默猎手 | 机器人 | 观者 |
+|------|----------|----------|--------|------|
+| 对局数 | 14,586 局 | 12,328 局 | — | 5,166 局 |
+| 卡牌决策样本 | 250,260 条 | 200,171 条 | — | 92,929 条 |
+| 篝火决策样本 | 80,759 条 | 66,884 条 | — | 29,938 条 |
+| Boss 遗物决策样本 | 16,185 条 | 12,870 条 | — | 6,423 条 |
+| 商店决策样本 | 706 条 | 602 条 | — | 543 条 |
 
 ### 模型架构
 
@@ -94,6 +94,7 @@ poetry install
 ```shell
 python -m ironclad_advisor.build_db
 python -m silent_advisor.build_db
+python -m defect_advisor.build_db
 python -m watcher_advisor.build_db
 ```
 
@@ -109,6 +110,11 @@ python -m ironclad_advisor.ml_advisor_v3 train
 python -m silent_advisor.ml_advisor train
 python -m silent_advisor.ml_advisor_v2 train
 python -m silent_advisor.ml_advisor_v3 train
+
+# 机器人
+python -m defect_advisor.ml_advisor train
+python -m defect_advisor.ml_advisor_v2 train
+python -m defect_advisor.ml_advisor_v3 train
 
 # 观者
 python -m watcher_advisor.ml_advisor train
@@ -168,17 +174,21 @@ python -m ironclad_advisor.ml_advisor_v2 shop \
 配合 [CommunicationMod](https://github.com/ForgottenArbiter/CommunicationMod) 使用，在游戏中自动给出建议：
 
 ```shell
-# 根据角色选择对应的 advisor
+# 根据角色选择对应的 advisor，或使用统一入口（自动识别角色）
 python -m ironclad_advisor.communicate
 python -m silent_advisor.communicate
+python -m defect_advisor.communicate
 python -m watcher_advisor.communicate
+# 统一入口（推荐）
+python communicate.py
 ```
 
 ## 项目结构
 
 ```
 STS1/
-├── transformer_core.py     # V3 共享核心：纯 NumPy Transformer（三角色共用）
+├── transformer_core.py     # V3 共享核心：纯 NumPy Transformer（四角色共用）
+├── communicate.py          # 统一 CommunicationMod 入口（自动识别角色）
 ├── ironclad_advisor/       # 铁甲战士 ML 顾问
 │   ├── build_db.py         # 决策数据库构建（解析 .run 文件）
 │   ├── ml_advisor.py       # V1 模型：XGBoost + LightGBM 二分类
@@ -191,6 +201,14 @@ STS1/
 │   ├── build_db.py         # 过滤 THE_SILENT，基础牌组 Strike_G/Defend_G
 │   ├── ml_advisor.py
 │   ├── ml_advisor_v2.py    # 毒/弃牌/小刀/格挡 synergy
+│   ├── ml_advisor_v3.py    # V3 Transformer
+│   ├── communicate.py
+│   ├── db/
+│   └── models/
+├── defect_advisor/         # 机器人 ML 顾问（结构同上）
+│   ├── build_db.py         # 过滤 DEFECT，基础牌组 Strike_B/Defend_B/Zap/Dualcast
+│   ├── ml_advisor.py
+│   ├── ml_advisor_v2.py    # 法球/Focus/Claw/能量 synergy
 │   ├── ml_advisor_v3.py    # V3 Transformer
 │   ├── communicate.py
 │   ├── db/
@@ -232,7 +250,7 @@ STS1/
 - [x] 对局数据统计分析
 - [x] 铁甲战士 AI 顾问
 - [x] 静默猎手（Silent）AI 顾问
-- [ ] 机器人（Defect）AI 顾问
+- [x] 机器人（Defect）AI 顾问
 - [x] 观者（Watcher）AI 顾问
 - [x] 重复能力牌惩罚机制
 - [x] V3 Transformer 模型（纯 NumPy 自注意力，候选选项互相感知）
