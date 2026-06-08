@@ -281,7 +281,13 @@ cython_debug/
 poetry.toml
 
 
-# Ironclad advisor generated database (rebuilt from run files)
+# Advisor generated databases (rebuilt from run files)
 ironclad_advisor/db/
+silent_advisor/db/
+ironclad_advisor/db/
+watcher_advisor/db/
+
+# Training run logs (TensorBoard, etc.)
+runs/
 
 # End of https://www.toptal.com/developers/gitignore/api/python,pycharm

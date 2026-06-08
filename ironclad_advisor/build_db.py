@@ -61,9 +61,14 @@ def get_shop_cards_by_floor(run: dict) -> dict[int, list[str]]:
     return result
 
 
-def reconstruct_deck_at(run: dict, target_floor: int) -> list[str]:
-    """Reconstruct deck contents at the start of a given floor."""
+def reconstruct_deck_at(run: dict, target_floor: int) -> tuple[list[str], dict[str, int]]:
+    """Reconstruct deck contents and upgrade counts at the start of a given floor.
+
+    Returns:
+        (deck, deck_upgrades) where deck_upgrades maps card_name -> upgrade count.
+    """
     deck = list(IRONCLAD_BASE_DECK)
+    deck_upgrades: dict[str, int] = {}
 
     # Neow bonus
     neow = run.get("neow_bonus_log", {})
@@ -108,7 +113,15 @@ def reconstruct_deck_at(run: dict, target_floor: int) -> list[str]:
             if n in deck:
                 deck.remove(n)
 
-    return deck
+    # Track campfire SMITH upgrades before target_floor
+    for campfire in run.get("campfire_choices", []):
+        if int(campfire["floor"]) >= target_floor:
+            break
+        if campfire["key"] == "SMITH" and campfire.get("data"):
+            card_name = normalize_card(campfire["data"])
+            deck_upgrades[card_name] = deck_upgrades.get(card_name, 0) + 1
+
+    return deck, deck_upgrades
 
 
 def get_relics_at(run: dict, target_floor: int) -> list[str]:
@@ -170,8 +183,9 @@ def build_card_decisions(runs: list[dict]) -> dict:
             hp, max_hp = get_hp_at(run, floor)
             hp_pct = round(hp / max_hp * 100) if hp and max_hp else None
 
-            deck = reconstruct_deck_at(run, floor)
+            deck, deck_upgrades = reconstruct_deck_at(run, floor)
             relics = get_relics_at(run, floor)
+            num_upgrades = sum(deck_upgrades.values())
 
             for opt in offered:
                 pick_count[opt] += 1
@@ -187,6 +201,8 @@ def build_card_decisions(runs: list[dict]) -> dict:
                 "hp_pct": hp_pct,
                 "deck": deck,
                 "deck_size": len(deck),
+                "num_upgrades": num_upgrades,
+                "deck_upgrades": deck_upgrades,
                 "relics": relics,
                 "offered": offered,
                 "picked": picked,
@@ -239,10 +255,11 @@ def build_boss_relic_decisions(runs: list[dict]) -> dict:
             offered = ([picked] if picked else []) + not_picked
 
             boss_floor = 16 if act == 1 else 33 if act == 2 else 50
-            deck = reconstruct_deck_at(run, boss_floor)
+            deck, deck_upgrades = reconstruct_deck_at(run, boss_floor)
             relics_before = get_relics_at(run, boss_floor)
             hp, max_hp = get_hp_at(run, boss_floor)
             hp_pct = round(hp / max_hp * 100) if hp and max_hp else None
+            num_upgrades = sum(deck_upgrades.values())
 
             for opt in offered:
                 pick_count[act][opt] += 1
@@ -256,6 +273,8 @@ def build_boss_relic_decisions(runs: list[dict]) -> dict:
                 "hp_pct": hp_pct,
                 "deck": deck,
                 "deck_size": len(deck),
+                "num_upgrades": num_upgrades,
+                "deck_upgrades": deck_upgrades,
                 "relics_before": relics_before,
                 "offered": offered,
                 "picked": picked,
@@ -312,8 +331,9 @@ def build_campfire_decisions(runs: list[dict]) -> dict:
 
             hp, max_hp = get_hp_at(run, floor)
             hp_pct = round(hp / max_hp * 100) if hp and max_hp else None
-            deck = reconstruct_deck_at(run, floor)
+            deck, deck_upgrades = reconstruct_deck_at(run, floor)
             relics = get_relics_at(run, floor)
+            num_upgrades = sum(deck_upgrades.values())
 
             if key in counters:
                 counters[key][1] += 1
@@ -349,6 +369,8 @@ def build_campfire_decisions(runs: list[dict]) -> dict:
                 "card_upgraded": normalize_card(data) if data else None,
                 "deck": deck,
                 "deck_size": len(deck),
+                "num_upgrades": num_upgrades,
+                "deck_upgrades": deck_upgrades,
                 "relics": relics,
                 "victory": victory,
             })
@@ -414,8 +436,9 @@ def build_shop_decisions(runs: list[dict]) -> dict:
             bought = set(purchased_by_floor.get(floor, []))
             hp, max_hp = get_hp_at(run, floor)
             hp_pct = round(hp / max_hp * 100) if hp and max_hp else None
-            deck = reconstruct_deck_at(run, floor)
+            deck, deck_upgrades = reconstruct_deck_at(run, floor)
             relics = get_relics_at(run, floor)
+            num_upgrades = sum(deck_upgrades.values())
             gold_list = run.get("gold_per_floor", [])
             gold = gold_list[floor - 1] if floor - 1 < len(gold_list) else None
 
@@ -437,6 +460,8 @@ def build_shop_decisions(runs: list[dict]) -> dict:
                 "gold": gold,
                 "deck": deck,
                 "deck_size": len(deck),
+                "num_upgrades": num_upgrades,
+                "deck_upgrades": deck_upgrades,
                 "relics": relics,
                 "available_cards": available_cards,
                 "available_relics": available_relics,

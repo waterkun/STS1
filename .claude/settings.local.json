@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(python3:*)",
+      "Bash(wc:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(# Try to find the game via Steam library folders cat \"\"/c/Program Files \\(x86\\)/Steam/config/libraryfolders.vdf\"\")",
+      "Bash(javap:*)",
+      "WebFetch(domain:sts1.heart-rate.net)",
+      "Bash(curl:*)",
+      "Bash(if not exist \"F:\\\\AI_Learn\\\\slay_of_spire\\\\STS1\\\\runs\\\\heart-rate-net\" mkdir \"F:\\\\AI_Learn\\\\slay_of_spire\\\\STS1\\\\runs\\\\heart-rate-net\")",
+      "Bash(grep:*)",
+      "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && python3 -c \"\"import json; d=json.load\\(open\\(\\\\\"\"{}\\\\\"\"\\)\\); shops=d.get\\(\\\\\"\"shop_contents\\\\\"\", []\\); print\\(json.dumps\\(shops[0] if shops else {}, indent=2\\)\\)\"\" 2>/dev/null')",
+      "Bash(find . -name \"*.run\" -exec python -c \"import json, sys; data = json.load\\(open\\(sys.argv[1]\\)\\); sys.exit\\(0 if data.get\\(''character_chosen''\\) == ''IRONCLAD'' else 1\\)\" {} ; -print -quit)",
+      "Bash(dir:*)",
+      "Bash(git filter-repo:*)"
+    ]
+  }
+}

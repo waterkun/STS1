@@ -1,0 +1,16 @@
+python -m ironclad_advisor.ml_advisor_v2 train
+Get-Content -Path "advisor.log" -Wait -Tail 10
+
+
+
+
+
+
+
+
+
+
+
+
+
+
