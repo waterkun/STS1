@@ -232,6 +232,49 @@ def card_count_in_deck(card: str, deck: list[str]) -> float:
 # 模型 A: LambdaMART 排序模型 - 数据构造
 # ---------------------------------------------------------------------------
 
+def temporal_features(floor: int, act: int, hp_pct: float) -> np.ndarray:
+    """游戏进程时序特征 (8维)。
+
+    捕捉：当前在 act 中的进度、距 boss 距离、精英区标记、血量分桶。
+    """
+    # 每 act 的楼层范围: Act1=1-16, Act2=17-33, Act3=34-50(boss@50), Act4=51+
+    act_start = {1: 1, 2: 17, 3: 34, 4: 51}
+    act_boss = {1: 16, 2: 33, 3: 50, 4: 56}
+    act_len = {1: 16, 2: 17, 3: 17, 4: 6}
+
+    floor = floor or 0
+    act = act or 1
+    hp_pct = hp_pct or 0
+
+    a = max(1, min(act, 4))
+    boss_floor = act_boss.get(a, 56)
+    start_floor = act_start.get(a, 1)
+    length = act_len.get(a, 17)
+
+    # 当前 act 内进度 (0~1)
+    floor_pct_in_act = (floor - start_floor) / max(length, 1)
+    floor_pct_in_act = max(0.0, min(1.0, floor_pct_in_act))
+
+    # 距下一个 boss 的楼层数 (归一化到 0~1)
+    floors_to_boss = max(0, boss_floor - floor) / max(length, 1)
+
+    # 精英区标记: act 内 floor 5~9 通常是第一个精英区
+    floor_in_act = floor - start_floor
+    is_pre_elite = 1.0 if 4 <= floor_in_act <= 8 else 0.0
+
+    # 临近 boss (3 层内)
+    is_near_boss = 1.0 if (boss_floor - floor) <= 3 and floor <= boss_floor else 0.0
+
+    # HP 分桶
+    hp_below_30 = 1.0 if hp_pct < 30 else 0.0
+    hp_30_50 = 1.0 if 30 <= hp_pct < 50 else 0.0
+    hp_50_70 = 1.0 if 50 <= hp_pct < 70 else 0.0
+    hp_above_70 = 1.0 if hp_pct >= 70 else 0.0
+
+    return np.array([floor_pct_in_act, floors_to_boss, is_pre_elite, is_near_boss,
+                     hp_below_30, hp_30_50, hp_50_70, hp_above_70], dtype=np.float32)
+
+
 def build_card_ranking_data(db: dict, vocab: dict):
     """构造卡牌排序训练数据。
 
@@ -257,6 +300,7 @@ def build_card_ranking_data(db: dict, vocab: dict):
         )
         is_boss = 1.0 if d.get("is_boss_reward", False) else 0.0
         da_feats = deck_analysis_features(d["deck"])
+        tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
 
         group_size = 0
         for option in offered:
@@ -273,7 +317,7 @@ def build_card_ranking_data(db: dict, vocab: dict):
             extra = np.array([is_boss, is_skip, pick_rate, win_rate_in_deck,
                               count_in_deck], dtype=np.float32)
             synergy = card_synergy_features(option, d["deck"])
-            row = np.concatenate([base, da_feats, extra, synergy, option_vec])
+            row = np.concatenate([base, da_feats, tempo, extra, synergy, option_vec])
             rows.append(row)
 
             # 标签
@@ -301,12 +345,14 @@ def build_boss_relic_ranking_data(db: dict, vocab: dict):
 
         act = d["act"]
         act_stats = stats.get(str(act), stats.get(act, {}))
+        boss_floor = {1: 16, 2: 33, 3: 50}.get(act, 16)
         base = base_features(
-            0, act, d["hp_pct"], d["deck_size"],
+            boss_floor, act, d["hp_pct"], d["deck_size"],
             len(d["relics_before"]), d["deck"], d["relics_before"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
         da_feats = deck_analysis_features(d["deck"])
+        tempo = temporal_features(boss_floor, act, d["hp_pct"])
         group_size = 0
 
         for option in offered:
@@ -319,7 +365,7 @@ def build_boss_relic_ranking_data(db: dict, vocab: dict):
             win_rate = s.get("win_rate_when_picked", 0.0)
 
             extra = np.array([pick_rate, win_rate], dtype=np.float32)
-            row = np.concatenate([base, da_feats, extra, option_vec])
+            row = np.concatenate([base, da_feats, tempo, extra, option_vec])
             rows.append(row)
 
             if option == d["picked"]:
@@ -344,6 +390,7 @@ def build_campfire_ranking_data(db: dict, vocab: dict):
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
         da_feats = deck_analysis_features(d["deck"])
+        tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
 
         hp_below_30 = 1.0 if d["hp_pct"] < 30 else 0.0
         hp_30_50 = 1.0 if 30 <= d["hp_pct"] < 50 else 0.0
@@ -355,7 +402,7 @@ def build_campfire_ranking_data(db: dict, vocab: dict):
             extra = np.array([choice_code,
                               hp_below_30, hp_30_50, hp_50_70, hp_above_70],
                              dtype=np.float32)
-            row = np.concatenate([base, da_feats, extra])
+            row = np.concatenate([base, da_feats, tempo, extra])
             rows.append(row)
 
             if d["choice"] == choice_name:
@@ -383,6 +430,7 @@ def build_shop_ranking_data(db: dict, vocab: dict):
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
         da_feats = deck_analysis_features(d["deck"])
+        tempo = temporal_features(d["floor"], d.get("act", 1), d["hp_pct"])
         gold = d.get("gold", 0)
         purchased_set = set(d.get("purchased", []))
 
@@ -416,7 +464,7 @@ def build_shop_ranking_data(db: dict, vocab: dict):
                                   was_bought], dtype=np.float32)
                 was_picked = item in purchased_set
 
-            row = np.concatenate([base, da_feats, extra, card_vec, relic_vec])
+            row = np.concatenate([base, da_feats, tempo, extra, card_vec, relic_vec])
             rows.append(row)
 
             if was_picked:
@@ -929,6 +977,7 @@ def card_inference_features_v2(floor: int, act: int, hp_pct: int,
                          num_upgrades, deck_upgrades)
     is_boss = 1.0 if floor in (16, 33) else 0.0
     da_feats = deck_analysis_features(deck)
+    tempo = temporal_features(floor, act, hp_pct)
     rows = []
 
     for option in options:
@@ -945,7 +994,7 @@ def card_inference_features_v2(floor: int, act: int, hp_pct: int,
         extra = np.array([is_boss, is_skip, pick_rate, win_rate_in_deck,
                           count_in_deck], dtype=np.float32)
         synergy = card_synergy_features(option, deck)
-        rows.append(np.concatenate([base, da_feats, extra, synergy, option_vec]))
+        rows.append(np.concatenate([base, da_feats, tempo, extra, synergy, option_vec]))
 
     return np.array(rows)
 
@@ -957,9 +1006,11 @@ def boss_relic_inference_features_v2(act: int, hp_pct: int,
                                      deck_upgrades: dict | None = None) -> np.ndarray:
     relic_to_idx = vocab["relic_to_idx"]
     act_stats = stats.get(str(act), stats.get(act, {}))
-    base = base_features(0, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
+    boss_floor = {1: 16, 2: 33, 3: 50}.get(act, 16)
+    base = base_features(boss_floor, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
                          num_upgrades, deck_upgrades)
     da_feats = deck_analysis_features(deck)
+    tempo = temporal_features(boss_floor, act, hp_pct)
     rows = []
 
     for option in options:
@@ -972,7 +1023,7 @@ def boss_relic_inference_features_v2(act: int, hp_pct: int,
         win_rate = s.get("win_rate_when_picked", 0.0)
 
         extra = np.array([pick_rate, win_rate], dtype=np.float32)
-        rows.append(np.concatenate([base, da_feats, extra, option_vec]))
+        rows.append(np.concatenate([base, da_feats, tempo, extra, option_vec]))
 
     return np.array(rows)
 
@@ -984,6 +1035,7 @@ def campfire_inference_features_v2(floor: int, act: int, hp_pct: int,
     base = base_features(floor, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
                          num_upgrades, deck_upgrades)
     da_feats = deck_analysis_features(deck)
+    tempo = temporal_features(floor, act, hp_pct)
 
     hp_below_30 = 1.0 if hp_pct < 30 else 0.0
     hp_30_50 = 1.0 if 30 <= hp_pct < 50 else 0.0
@@ -995,7 +1047,7 @@ def campfire_inference_features_v2(floor: int, act: int, hp_pct: int,
         extra = np.array([choice_code,
                           hp_below_30, hp_30_50, hp_50_70, hp_above_70],
                          dtype=np.float32)
-        rows.append(np.concatenate([base, da_feats, extra]))
+        rows.append(np.concatenate([base, da_feats, tempo, extra]))
 
     return np.array(rows)
 
@@ -1010,6 +1062,7 @@ def shop_inference_features_v2(floor: int, act: int, hp_pct: int, gold: int,
     base = base_features(floor, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
                          num_upgrades, deck_upgrades)
     da_feats = deck_analysis_features(deck)
+    tempo = temporal_features(floor, act, hp_pct)
     rows = []
 
     for item in items:
@@ -1021,13 +1074,13 @@ def shop_inference_features_v2(floor: int, act: int, hp_pct: int, gold: int,
         was_bought = 1.0
         extra = np.array([gold, buy_wr, skip_wr, float(times_purchased), was_bought],
                          dtype=np.float32)
-        rows.append(np.concatenate([base, da_feats, extra, card_vec, relic_vec]))
+        rows.append(np.concatenate([base, da_feats, tempo, extra, card_vec, relic_vec]))
 
     # 不购买
     card_vec = np.zeros(len(card_to_idx), dtype=np.float32)
     relic_vec = np.zeros(len(relic_to_idx), dtype=np.float32)
     extra = np.array([gold, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
-    rows.append(np.concatenate([base, da_feats, extra, card_vec, relic_vec]))
+    rows.append(np.concatenate([base, da_feats, tempo, extra, card_vec, relic_vec]))
 
     return np.array(rows)
 

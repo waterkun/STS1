@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import torch
 
 from silent_advisor.ml_advisor import (
     load_db,
@@ -53,19 +54,31 @@ _V3_MODEL_NAMES = [
 
 
 def save_v3_model(model, name: str):
-    path = MODEL_DIR / f"{name}.pkl"
-    with open(path, "wb") as f:
-        pickle.dump(model, f)
+    path = MODEL_DIR / f"{name}.pt"
+    torch.save({
+        "config": {
+            "input_dim": model.input_dim,
+            "d_model": model.d_model,
+            "n_heads": model.n_heads,
+            "d_ff": model.d_ff,
+            "n_layers": model.n_layers,
+        },
+        "state_dict": model.state_dict(),
+    }, path)
     print(f"  已保存: {path}")
 
 
 def load_v3_models() -> dict:
     result = {}
     for name in _V3_MODEL_NAMES:
-        path = MODEL_DIR / f"{name}.pkl"
+        path = MODEL_DIR / f"{name}.pt"
         if path.exists():
-            with open(path, "rb") as f:
-                result[name] = pickle.load(f)
+            data = torch.load(path, map_location="cpu", weights_only=False)
+            cfg = data["config"]
+            model = STSTransformerRanker(**cfg)
+            model.load_state_dict(data["state_dict"])
+            model.eval()
+            result[name] = model
     return result
 
 

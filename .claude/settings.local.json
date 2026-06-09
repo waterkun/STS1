@@ -18,7 +18,9 @@
       "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && python3 -c \"\"import json; d=json.load\\(open\\(\\\\\"\"{}\\\\\"\"\\)\\); shops=d.get\\(\\\\\"\"shop_contents\\\\\"\", []\\); print\\(json.dumps\\(shops[0] if shops else {}, indent=2\\)\\)\"\" 2>/dev/null')",
       "Bash(find . -name \"*.run\" -exec python -c \"import json, sys; data = json.load\\(open\\(sys.argv[1]\\)\\); sys.exit\\(0 if data.get\\(''character_chosen''\\) == ''IRONCLAD'' else 1\\)\" {} ; -print -quit)",
       "Bash(dir:*)",
-      "Bash(git filter-repo:*)"
+      "Bash(git filter-repo:*)",
+      "Bash(findstr:*)",
+      "Bash(pip show:*)"
     ]
   }
 }
