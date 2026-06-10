@@ -20,7 +20,15 @@
       "Bash(dir:*)",
       "Bash(git filter-repo:*)",
       "Bash(findstr:*)",
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(for f in runs/**/*.run)",
+      "Bash(do if grep -q '\"\"shop_contents\"\".*\"\"cards\"\"' \"$f\")",
+      "Bash(then python3 -c \"import json, sys; data=json.load\\(open\\(''$f''\\)\\); print\\(json.dumps\\(data.get\\(''shop_contents'',[]\\)[:1], indent=2\\)\\)\")",
+      "Bash(break)",
+      "Bash(fi:*)",
+      "Bash(done)",
+      "Bash(powershell:*)"
     ]
   }
 }

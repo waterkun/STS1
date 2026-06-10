@@ -13,6 +13,8 @@ PyTorch Transformer 排序模型 - 杀戮尖塔决策助手 V3 核心
             LayerNorm → FeedForward        → Residual
 """
 
+import math
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -26,29 +28,33 @@ import torch.nn.functional as F
 class TransformerBlock(nn.Module):
     """
     Pre-norm Transformer 编码块:
-      x → LN → MHA → x+residual → LN → FFN → x+residual
+      x → LN → MHA → Dropout → x+residual → LN → FFN → Dropout → x+residual
     """
 
-    def __init__(self, d_model, n_heads, d_ff):
+    def __init__(self, d_model, n_heads, d_ff, dropout=0.1):
         super().__init__()
         self.ln1 = nn.LayerNorm(d_model)
-        self.attn = nn.MultiheadAttention(d_model, n_heads, batch_first=True)
+        self.attn = nn.MultiheadAttention(d_model, n_heads, batch_first=True,
+                                          dropout=dropout)
+        self.drop1 = nn.Dropout(dropout)
         self.ln2 = nn.LayerNorm(d_model)
         self.ffn = nn.Sequential(
             nn.Linear(d_model, d_ff),
             nn.ReLU(),
+            nn.Dropout(dropout),
             nn.Linear(d_ff, d_model),
         )
+        self.drop2 = nn.Dropout(dropout)
 
     def forward(self, x, key_padding_mask=None):
         # x: (B, N, d_model), key_padding_mask: (B, N) True=ignore
         h1 = self.ln1(x)
         attn_out, _ = self.attn(h1, h1, h1, key_padding_mask=key_padding_mask)
-        x2 = x + attn_out
+        x2 = x + self.drop1(attn_out)
 
         h2 = self.ln2(x2)
         ffn_out = self.ffn(h2)
-        return x2 + ffn_out
+        return x2 + self.drop2(ffn_out)
 
 
 # ============================================================
@@ -66,17 +72,21 @@ class STSTransformerRanker(nn.Module):
     每个选项的评分受其他选项影响（捕捉相对价值）。
     """
 
-    def __init__(self, input_dim, d_model=64, n_heads=4, d_ff=128, n_layers=2):
+    def __init__(self, input_dim, d_model=64, n_heads=4, d_ff=128, n_layers=2,
+                 dropout=0.1):
         super().__init__()
         self.input_dim = input_dim
         self.d_model = d_model
         self.n_heads = n_heads
         self.d_ff = d_ff
         self.n_layers = n_layers
+        self.dropout = dropout
 
         self.input_proj = nn.Linear(input_dim, d_model)
+        self.input_drop = nn.Dropout(dropout)
         self.blocks = nn.ModuleList([
-            TransformerBlock(d_model, n_heads, d_ff) for _ in range(n_layers)
+            TransformerBlock(d_model, n_heads, d_ff, dropout=dropout)
+            for _ in range(n_layers)
         ])
         self.output_head = nn.Linear(d_model, 1)
 
@@ -103,7 +113,7 @@ class STSTransformerRanker(nn.Module):
             x = x.unsqueeze(0)  # (1, N, F)
             squeeze = True
 
-        h = self.input_proj(x)        # (B, N, d_model)
+        h = self.input_drop(self.input_proj(x))  # (B, N, d_model)
         for block in self.blocks:
             h = block(h, key_padding_mask=key_padding_mask)
         scores = self.output_head(h).squeeze(-1)  # (B, N)
@@ -229,7 +239,15 @@ def train_transformer(decisions_X, decisions_y,
     model.train()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs, eta_min=lr * 0.01)
+
+    # Warmup + Cosine Decay: 前 5 epochs 线性 warmup (0.2→1.0)，之后 cosine decay 到 1%
+    warmup_epochs = 5
+    def lr_lambda(epoch):
+        if epoch < warmup_epochs:
+            return 0.2 + 0.8 * epoch / warmup_epochs
+        progress = (epoch - warmup_epochs) / max(n_epochs - warmup_epochs, 1)
+        return 0.01 + 0.99 * 0.5 * (1.0 + math.cos(math.pi * progress))
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
     for epoch in range(n_epochs):
         # 每个 epoch 对排序后的索引做局部打乱（在相近长度内打乱）
@@ -255,15 +273,23 @@ def train_transformer(decisions_X, decisions_y,
 
             scores = model(x_pad, key_padding_mask=mask)  # (B, max_N)
 
-            # 计算 ListNet loss，对 padding 位置用 -inf 使 softmax 忽略
-            scores = scores.masked_fill(mask, -1e9)
-
-            pred_log_probs = torch.log_softmax(scores, dim=-1)  # (B, max_N)
-            target_probs = torch.softmax(y_pad, dim=-1)         # (B, max_N)
-
-            # 交叉熵: -sum(target * log_pred)，只在非 padding 位置
-            loss_per_sample = -torch.sum(target_probs * pred_log_probs, dim=-1)  # (B,)
-            loss = loss_per_sample.mean()
+            # Pairwise Margin Loss: 对 label[i] > label[j] 的对，
+            # 计算 softplus(score_j - score_i)
+            # 向量化实现（广播），O(n^2) 但 n 通常只有 3-5
+            valid = ~mask  # (B, max_N), True = 有效位置
+            # 构造 pairwise 差异
+            s_i = scores.unsqueeze(2)  # (B, N, 1)
+            s_j = scores.unsqueeze(1)  # (B, 1, N)
+            y_i = y_pad.unsqueeze(2)   # (B, N, 1)
+            y_j = y_pad.unsqueeze(1)   # (B, 1, N)
+            # 有效对: 两个位置都非 padding 且 label_i > label_j
+            valid_mask = valid.unsqueeze(2) & valid.unsqueeze(1)  # (B, N, N)
+            pair_mask = (y_i > y_j) & valid_mask  # (B, N, N)
+            # softplus(score_j - score_i) 对应 label_i > label_j 的对
+            pair_loss = F.softplus(s_j - s_i)  # (B, N, N)
+            pair_loss = pair_loss * pair_mask.float()
+            n_pairs = pair_mask.float().sum()
+            loss = pair_loss.sum() / n_pairs.clamp(min=1.0)
 
             optimizer.zero_grad()
             loss.backward()

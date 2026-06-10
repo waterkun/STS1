@@ -97,6 +97,26 @@ _POWER_CARDS = {
 }
 
 
+_BASIC_CARDS = {"Strike_R", "Defend_R"}
+
+
+def shop_remove_context(deck: list[str]) -> np.ndarray:
+    """商店移除上下文特征（3 维）:
+    - n_basic: 基础牌数量 (Strike/Defend)
+    - n_curse: 诅咒牌数量
+    - thin_value: 1/deck_size (移除价值指标)
+    """
+    deck_bases = [c.split("+")[0].strip() for c in deck]
+    n_basic = sum(1 for b in deck_bases if b in _BASIC_CARDS)
+    n_curse = sum(1 for b in deck_bases if b in {
+        "Curse of the Bell", "Necronomicurse", "Pain", "Parasite",
+        "Regret", "Shame", "Doubt", "Burn", "Decay", "Injury",
+        "Normality", "Pride", "Writhe", "Ascender's Bane", "Clumsy",
+    })
+    thin_value = 1.0 / max(len(deck), 1)
+    return np.array([n_basic, n_curse, thin_value], dtype=np.float32)
+
+
 def _card_type(name: str) -> str:
     base = name.split("+")[0].strip()
     if base in _ATTACK_CARDS:
@@ -229,6 +249,46 @@ def card_count_in_deck(card: str, deck: list[str]) -> float:
 
 
 # ---------------------------------------------------------------------------
+# 遗物-卡牌交互特征（9 维）
+# ---------------------------------------------------------------------------
+
+# (relic_name, card_set, description)
+_RELIC_CARD_SYNERGIES = [
+    ("Dead Branch", _EXHAUST_PRODUCERS | {"Corruption", "Fiend Fire", "Second Wind", "True Grit", "Sentinel", "Offering"}, "dead_branch_exhaust"),
+    ("Snecko Eye", {"Bludgeon", "Carnage", "Demon Form", "Barricade", "Impervious", "Feed", "Fiend Fire", "Immolate", "Reaper"}, "snecko_high_cost"),
+    ("Necronomicon", {"Carnage", "Bludgeon", "Hemokinesis", "Pummel", "Searing Blow", "Immolate", "Reaper"}, "necronomicon_2cost_atk"),
+    ("Mark of Pain", _ATTACK_CARDS, "mark_pain_attacks"),
+    ("Paper Phrog", _VULNERABLE_APPLIERS, "paper_phrog_vuln"),
+    ("Pen Nib", {"Bludgeon", "Heavy Blade", "Carnage", "Hemokinesis", "Reaper"}, "pen_nib_high_dmg"),
+    ("Shuriken", _MULTI_HIT | {"Twin Strike", "Anger"}, "shuriken_multi_atk"),
+    ("Kunai", _MULTI_HIT | {"Twin Strike", "Anger"}, "kunai_multi_atk"),
+    ("Ornamental Fan", _ATTACK_CARDS, "ornamental_fan_attacks"),
+]
+
+
+def relic_card_synergy_features(card: str, deck: list[str],
+                                relics: list[str]) -> np.ndarray:
+    """计算候选卡与当前遗物的协同特征（9 维）。"""
+    base = card.split("+")[0].strip()
+    relic_set = set(relics)
+    scores = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
+    for i, (relic_name, card_set, _) in enumerate(_RELIC_CARD_SYNERGIES):
+        if relic_name in relic_set and base in card_set:
+            scores[i] = 1.0
+    return scores
+
+
+def relic_deck_synergy_features(relic: str, deck: list[str]) -> np.ndarray:
+    """反向协同：候选遗物与卡组中卡牌的协同计数（9 维）。"""
+    deck_bases = [c.split("+")[0].strip() for c in deck]
+    scores = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
+    for i, (relic_name, card_set, _) in enumerate(_RELIC_CARD_SYNERGIES):
+        if relic == relic_name:
+            scores[i] = float(sum(1 for b in deck_bases if b in card_set))
+    return scores
+
+
+# ---------------------------------------------------------------------------
 # 模型 A: LambdaMART 排序模型 - 数据构造
 # ---------------------------------------------------------------------------
 
@@ -317,7 +377,8 @@ def build_card_ranking_data(db: dict, vocab: dict):
             extra = np.array([is_boss, is_skip, pick_rate, win_rate_in_deck,
                               count_in_deck], dtype=np.float32)
             synergy = card_synergy_features(option, d["deck"])
-            row = np.concatenate([base, da_feats, tempo, extra, synergy, option_vec])
+            relic_card_syn = relic_card_synergy_features(option, d["deck"], d["relics"])
+            row = np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn, option_vec])
             rows.append(row)
 
             # 标签
@@ -365,7 +426,8 @@ def build_boss_relic_ranking_data(db: dict, vocab: dict):
             win_rate = s.get("win_rate_when_picked", 0.0)
 
             extra = np.array([pick_rate, win_rate], dtype=np.float32)
-            row = np.concatenate([base, da_feats, tempo, extra, option_vec])
+            rds = relic_deck_synergy_features(option, d["deck"])
+            row = np.concatenate([base, da_feats, tempo, extra, rds, option_vec])
             rows.append(row)
 
             if option == d["picked"]:
@@ -442,17 +504,32 @@ def build_shop_ranking_data(db: dict, vocab: dict):
         if not all_available:
             continue
 
-        # 加上"不购买"选项
-        items_with_skip = all_available + ["不购买"]
+        # 加上"REMOVE"和"不购买"选项
+        items_with_skip = all_available + ["REMOVE", "不购买"]
         group_size = 0
+        remove_ctx = shop_remove_context(d["deck"])
+        was_purged = d.get("purged_card") is not None
 
         for item in items_with_skip:
-            if item == "不购买":
+            if item == "REMOVE":
+                card_vec = np.zeros(len(card_to_idx), dtype=np.float32)
+                relic_vec = np.zeros(len(relic_to_idx), dtype=np.float32)
+                s = stats.get("REMOVE", {})
+                buy_wr = s.get("win_rate_when_purchased", 0.0)
+                skip_wr = s.get("win_rate_when_skipped", 0.0)
+                times_purchased = s.get("times_purchased", 0)
+                was_bought = 1.0 if was_purged else 0.0
+                extra = np.array([gold, buy_wr, skip_wr, float(times_purchased),
+                                  was_bought], dtype=np.float32)
+                is_remove = 1.0
+                was_picked = was_purged
+            elif item == "不购买":
                 card_vec = np.zeros(len(card_to_idx), dtype=np.float32)
                 relic_vec = np.zeros(len(relic_to_idx), dtype=np.float32)
                 extra = np.array([gold, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
-                # "不购买"算作选了如果什么都没买
-                was_picked = len(purchased_set) == 0
+                is_remove = 0.0
+                # "不购买"算作选了如果什么都没买且没移除
+                was_picked = len(purchased_set) == 0 and not was_purged
             else:
                 card_vec, relic_vec = encode_item(item, card_to_idx, relic_to_idx)
                 s = stats.get(item, {})
@@ -462,9 +539,13 @@ def build_shop_ranking_data(db: dict, vocab: dict):
                 was_bought = 1.0 if item in purchased_set else 0.0
                 extra = np.array([gold, buy_wr, skip_wr, float(times_purchased),
                                   was_bought], dtype=np.float32)
+                is_remove = 0.0
                 was_picked = item in purchased_set
 
-            row = np.concatenate([base, da_feats, tempo, extra, card_vec, relic_vec])
+            remove_feats = np.array([is_remove], dtype=np.float32)
+            rcs = relic_card_synergy_features(item, d["deck"], d["relics"])
+            rds = relic_deck_synergy_features(item, d["deck"])
+            row = np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec])
             rows.append(row)
 
             if was_picked:
@@ -501,6 +582,7 @@ def build_card_choice_data(db: dict, vocab: dict):
         )
         is_boss = 1.0 if d.get("is_boss_reward", False) else 0.0
         da_feats = deck_analysis_features(d["deck"])
+        tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
 
         for option in offered:
             option_vec = np.zeros(len(card_to_idx), dtype=np.float32)
@@ -516,7 +598,8 @@ def build_card_choice_data(db: dict, vocab: dict):
             extra = np.array([is_boss, is_skip, pick_rate, win_rate_in_deck,
                               count_in_deck], dtype=np.float32)
             synergy = card_synergy_features(option, d["deck"])
-            row = np.concatenate([base, da_feats, extra, synergy, option_vec])
+            relic_card_syn = relic_card_synergy_features(option, d["deck"], d["relics"])
+            row = np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn, option_vec])
             rows.append(row)
             labels.append(1 if option == d["picked"] else 0)
 
@@ -535,12 +618,14 @@ def build_boss_relic_choice_data(db: dict, vocab: dict):
 
         act = d["act"]
         act_stats = stats.get(str(act), stats.get(act, {}))
+        boss_floor = {1: 16, 2: 33, 3: 50}.get(act, 16)
         base = base_features(
-            0, act, d["hp_pct"], d["deck_size"],
+            boss_floor, act, d["hp_pct"], d["deck_size"],
             len(d["relics_before"]), d["deck"], d["relics_before"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
         da_feats = deck_analysis_features(d["deck"])
+        tempo = temporal_features(boss_floor, act, d["hp_pct"])
 
         for option in offered:
             option_vec = np.zeros(len(relic_to_idx), dtype=np.float32)
@@ -552,7 +637,8 @@ def build_boss_relic_choice_data(db: dict, vocab: dict):
             win_rate = s.get("win_rate_when_picked", 0.0)
 
             extra = np.array([pick_rate, win_rate], dtype=np.float32)
-            row = np.concatenate([base, da_feats, extra, option_vec])
+            rds = relic_deck_synergy_features(option, d["deck"])
+            row = np.concatenate([base, da_feats, tempo, extra, rds, option_vec])
             rows.append(row)
             labels.append(1 if option == d["picked"] else 0)
 
@@ -569,6 +655,7 @@ def build_campfire_choice_data(db: dict, vocab: dict):
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
         da_feats = deck_analysis_features(d["deck"])
+        tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
 
         hp_below_30 = 1.0 if d["hp_pct"] < 30 else 0.0
         hp_30_50 = 1.0 if 30 <= d["hp_pct"] < 50 else 0.0
@@ -579,7 +666,7 @@ def build_campfire_choice_data(db: dict, vocab: dict):
             extra = np.array([choice_code,
                               hp_below_30, hp_30_50, hp_50_70, hp_above_70],
                              dtype=np.float32)
-            row = np.concatenate([base, da_feats, extra])
+            row = np.concatenate([base, da_feats, tempo, extra])
             rows.append(row)
             labels.append(1 if d["choice"] == choice_name else 0)
 
@@ -599,6 +686,7 @@ def build_shop_choice_data(db: dict, vocab: dict):
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
         da_feats = deck_analysis_features(d["deck"])
+        tempo = temporal_features(d["floor"], d.get("act", 1), d["hp_pct"])
         gold = d.get("gold", 0)
         purchased_set = set(d.get("purchased", []))
 
@@ -610,14 +698,29 @@ def build_shop_choice_data(db: dict, vocab: dict):
         if not all_available:
             continue
 
-        items_with_skip = all_available + ["不购买"]
+        items_with_skip = all_available + ["REMOVE", "不购买"]
+        remove_ctx = shop_remove_context(d["deck"])
+        was_purged = d.get("purged_card") is not None
 
         for item in items_with_skip:
-            if item == "不购买":
+            if item == "REMOVE":
+                card_vec = np.zeros(len(card_to_idx), dtype=np.float32)
+                relic_vec = np.zeros(len(relic_to_idx), dtype=np.float32)
+                s = stats.get("REMOVE", {})
+                buy_wr = s.get("win_rate_when_purchased", 0.0)
+                skip_wr = s.get("win_rate_when_skipped", 0.0)
+                times_purchased = s.get("times_purchased", 0)
+                was_bought = 1.0 if was_purged else 0.0
+                extra = np.array([gold, buy_wr, skip_wr, float(times_purchased),
+                                  was_bought], dtype=np.float32)
+                is_remove = 1.0
+                was_picked = was_purged
+            elif item == "不购买":
                 card_vec = np.zeros(len(card_to_idx), dtype=np.float32)
                 relic_vec = np.zeros(len(relic_to_idx), dtype=np.float32)
                 extra = np.array([gold, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
-                was_picked = len(purchased_set) == 0
+                is_remove = 0.0
+                was_picked = len(purchased_set) == 0 and not was_purged
             else:
                 card_vec, relic_vec = encode_item(item, card_to_idx, relic_to_idx)
                 s = stats.get(item, {})
@@ -627,9 +730,13 @@ def build_shop_choice_data(db: dict, vocab: dict):
                 was_bought = 1.0 if item in purchased_set else 0.0
                 extra = np.array([gold, buy_wr, skip_wr, float(times_purchased),
                                   was_bought], dtype=np.float32)
+                is_remove = 0.0
                 was_picked = item in purchased_set
 
-            row = np.concatenate([base, da_feats, extra, card_vec, relic_vec])
+            remove_feats = np.array([is_remove], dtype=np.float32)
+            rcs = relic_card_synergy_features(item, d["deck"], d["relics"])
+            rds = relic_deck_synergy_features(item, d["deck"])
+            row = np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec])
             rows.append(row)
             labels.append(1 if was_picked else 0)
 
@@ -752,6 +859,8 @@ def compute_shop_cwr_stats(db: dict) -> dict:
         purchased = d.get("purchased", [])
         win = d["victory"]
 
+        purged = d.get("purged_card") is not None
+
         for item in purchased:
             cwr[ctx_key][item]["total"] += 1
             global_stats[item]["total"] += 1
@@ -761,7 +870,16 @@ def compute_shop_cwr_stats(db: dict) -> dict:
                 global_stats[item]["wins"] += 1
                 base_stats["wins"] += 1
 
-        if not purchased:
+        if purged:
+            cwr[ctx_key]["REMOVE"]["total"] += 1
+            global_stats["REMOVE"]["total"] += 1
+            base_stats["total"] += 1
+            if win:
+                cwr[ctx_key]["REMOVE"]["wins"] += 1
+                global_stats["REMOVE"]["wins"] += 1
+                base_stats["wins"] += 1
+
+        if not purchased and not purged:
             cwr[ctx_key]["不购买"]["total"] += 1
             global_stats["不购买"]["total"] += 1
             base_stats["total"] += 1
@@ -994,7 +1112,8 @@ def card_inference_features_v2(floor: int, act: int, hp_pct: int,
         extra = np.array([is_boss, is_skip, pick_rate, win_rate_in_deck,
                           count_in_deck], dtype=np.float32)
         synergy = card_synergy_features(option, deck)
-        rows.append(np.concatenate([base, da_feats, tempo, extra, synergy, option_vec]))
+        relic_card_syn = relic_card_synergy_features(option, deck, relics)
+        rows.append(np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn, option_vec]))
 
     return np.array(rows)
 
@@ -1023,7 +1142,8 @@ def boss_relic_inference_features_v2(act: int, hp_pct: int,
         win_rate = s.get("win_rate_when_picked", 0.0)
 
         extra = np.array([pick_rate, win_rate], dtype=np.float32)
-        rows.append(np.concatenate([base, da_feats, tempo, extra, option_vec]))
+        rds = relic_deck_synergy_features(option, deck)
+        rows.append(np.concatenate([base, da_feats, tempo, extra, rds, option_vec]))
 
     return np.array(rows)
 
@@ -1063,6 +1183,7 @@ def shop_inference_features_v2(floor: int, act: int, hp_pct: int, gold: int,
                          num_upgrades, deck_upgrades)
     da_feats = deck_analysis_features(deck)
     tempo = temporal_features(floor, act, hp_pct)
+    remove_ctx = shop_remove_context(deck)
     rows = []
 
     for item in items:
@@ -1074,13 +1195,32 @@ def shop_inference_features_v2(floor: int, act: int, hp_pct: int, gold: int,
         was_bought = 1.0
         extra = np.array([gold, buy_wr, skip_wr, float(times_purchased), was_bought],
                          dtype=np.float32)
-        rows.append(np.concatenate([base, da_feats, tempo, extra, card_vec, relic_vec]))
+        rcs = relic_card_synergy_features(item, deck, relics)
+        rds = relic_deck_synergy_features(item, deck)
+        remove_feats = np.array([0.0], dtype=np.float32)
+        rows.append(np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec]))
+
+    # REMOVE（移除卡牌）
+    card_vec = np.zeros(len(card_to_idx), dtype=np.float32)
+    relic_vec = np.zeros(len(relic_to_idx), dtype=np.float32)
+    s = stats.get("REMOVE", {})
+    buy_wr = s.get("win_rate_when_purchased", 0.0)
+    skip_wr = s.get("win_rate_when_skipped", 0.0)
+    times_purchased = s.get("times_purchased", 0)
+    extra = np.array([gold, buy_wr, skip_wr, float(times_purchased), 1.0], dtype=np.float32)
+    rcs = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
+    rds = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
+    remove_feats = np.array([1.0], dtype=np.float32)
+    rows.append(np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec]))
 
     # 不购买
     card_vec = np.zeros(len(card_to_idx), dtype=np.float32)
     relic_vec = np.zeros(len(relic_to_idx), dtype=np.float32)
     extra = np.array([gold, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
-    rows.append(np.concatenate([base, da_feats, tempo, extra, card_vec, relic_vec]))
+    rcs = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
+    rds = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
+    remove_feats = np.array([0.0], dtype=np.float32)
+    rows.append(np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec]))
 
     return np.array(rows)
 
@@ -1247,10 +1387,24 @@ def predict_all_shop(option_labels: list[str], floor: int, act: int, hp_pct: int
 # ---------------------------------------------------------------------------
 
 def save_v2_model(obj, name: str):
+    import time
     path = MODEL_DIR / f"{name}.pkl"
-    with open(path, "wb") as f:
-        pickle.dump(obj, f)
-    print(f"  已保存: {path}")
+    tmp_path = MODEL_DIR / f"{name}.pkl.tmp"
+    for attempt in range(5):
+        try:
+            with open(tmp_path, "wb") as f:
+                pickle.dump(obj, f)
+            if path.exists():
+                path.unlink()
+            tmp_path.rename(path)
+            print(f"  已保存: {path}")
+            return
+        except OSError as e:
+            if attempt < 4:
+                print(f"  保存 {name} 失败 (尝试 {attempt+1}/5): {e}, 重试中...")
+                time.sleep(1)
+            else:
+                raise
 
 
 def load_v2_models() -> dict:
@@ -1530,7 +1684,7 @@ def infer_shop_v2(args):
     v2_models = load_v2_models()
 
     all_items = avail_cards + avail_relics + avail_potions
-    option_labels = all_items + ["不购买"]
+    option_labels = all_items + ["移除卡牌", "不购买"]
 
     preds = predict_all_shop(option_labels, args.floor, args.act, hp_pct,
                              args.gold, deck, relics, all_items,

@@ -77,6 +77,7 @@ def save_v3_model(model, name: str):
             "n_heads": model.n_heads,
             "d_ff": model.d_ff,
             "n_layers": model.n_layers,
+            "dropout": model.dropout,
         },
         "state_dict": model.state_dict(),
     }, path)
@@ -331,7 +332,7 @@ def infer_shop(args):
     hp_pct = round(args.hp / args.max_hp * 100) if args.max_hp > 0 else 0
 
     all_items = avail_cards + avail_relics + avail_potions
-    option_labels = all_items + ["不购买"]
+    option_labels = all_items + ["移除卡牌", "不购买"]
 
     v3_models = load_v3_models()
     preds = predict_all_shop(option_labels, args.floor, args.act, hp_pct,

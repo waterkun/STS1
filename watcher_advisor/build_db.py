@@ -415,6 +415,12 @@ def build_shop_decisions(runs: list[dict]) -> dict:
         for floor, item in zip(purchase_floors, purchases):
             purchased_by_floor[int(floor)].append(item)
 
+        purge_floors = run.get("items_purged_floors", [])
+        purged_cards = run.get("items_purged", [])
+        purge_by_floor: dict[int, list[str]] = defaultdict(list)
+        for floor, card in zip(purge_floors, purged_cards):
+            purge_by_floor[int(floor)].append(normalize_card(card))
+
         for shop in run.get("shop_contents", []):
             floor = int(shop["floor"])
             available_cards = shop.get("cards", [])
@@ -441,6 +447,15 @@ def build_shop_decisions(runs: list[dict]) -> dict:
                     if victory:
                         item_stats[n][2] += 1
 
+            if purge_by_floor.get(floor):
+                item_stats["REMOVE"][1] += 1
+                if victory:
+                    item_stats["REMOVE"][0] += 1
+            else:
+                item_stats["REMOVE"][3] += 1
+                if victory:
+                    item_stats["REMOVE"][2] += 1
+
             decisions.append({
                 "floor": floor,
                 "act": get_act(floor),
@@ -455,6 +470,7 @@ def build_shop_decisions(runs: list[dict]) -> dict:
                 "available_relics": available_relics,
                 "available_potions": available_potions,
                 "purchased": list(bought),
+                "purged_card": purge_by_floor.get(floor, [None])[0],
                 "victory": victory,
             })
 

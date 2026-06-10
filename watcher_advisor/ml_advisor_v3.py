@@ -62,6 +62,7 @@ def save_v3_model(model, name: str):
             "n_heads": model.n_heads,
             "d_ff": model.d_ff,
             "n_layers": model.n_layers,
+            "dropout": model.dropout,
         },
         "state_dict": model.state_dict(),
     }, path)
@@ -296,7 +297,7 @@ def main():
         _print_predictions(options, preds)
     elif args.command == "shop":
         all_items = parse_list(args.cards) + parse_list(args.shop_relics) + parse_list(args.potions)
-        option_labels = all_items + ["不购买"]
+        option_labels = all_items + ["移除卡牌", "不购买"]
         preds = predict_all_shop(option_labels, args.floor, args.act, hp_pct,
                                  args.gold, deck, relics, all_items,
                                  db, vocab, v3_models)
