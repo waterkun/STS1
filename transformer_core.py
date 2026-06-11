@@ -171,20 +171,40 @@ def decisions_from_ranking_data(X, y, groups, decisions_w=None):
 # 训练函数
 # ============================================================
 
+_VAL_NDCG_MAX = 1000   # 每次评估最多使用的验证决策数
+_VAL_NDCG_BATCH = 256  # 批量前向传播的 batch 大小
+
 @torch.no_grad()
 def _compute_val_ndcg(model, val_X, val_y, device):
-    """计算验证集平均 NDCG（跳过全相同标签的决策）。"""
+    """批量计算验证集平均 NDCG（最多 _VAL_NDCG_MAX 个决策）。"""
     model.eval()
+
+    # 只取有意义的决策（至少两种不同标签）
+    pairs = [(x, y) for x, y in zip(val_X, val_y) if len(np.unique(y)) >= 2]
+    if not pairs:
+        model.train()
+        return float("nan")
+
+    # 限制数量，避免大数据集拖慢训练
+    if len(pairs) > _VAL_NDCG_MAX:
+        rng = np.random.default_rng(0)
+        idx = rng.choice(len(pairs), _VAL_NDCG_MAX, replace=False)
+        pairs = [pairs[i] for i in idx]
+
     ndcgs = []
-    for x, y in zip(val_X, val_y):
-        if len(np.unique(y)) < 2:
-            continue
-        x_t = torch.tensor(x, dtype=torch.float32, device=device)
-        scores = model(x_t).cpu().numpy()
-        try:
-            ndcgs.append(ndcg_score([y], [scores]))
-        except Exception:
-            pass
+    for start in range(0, len(pairs), _VAL_NDCG_BATCH):
+        chunk = pairs[start: start + _VAL_NDCG_BATCH]
+        bX = [p[0] for p in chunk]
+        bY = [p[1] for p in chunk]
+        x_pad, y_pad, mask = _collate_decisions(bX, bY, device)
+        scores_pad = model(x_pad, key_padding_mask=mask)  # (B, max_N)
+        scores_np = scores_pad.cpu().numpy()
+        for i, (y, length) in enumerate(zip(bY, [x.shape[0] for x in bX])):
+            try:
+                ndcgs.append(ndcg_score([y], [scores_np[i, :length]]))
+            except Exception:
+                pass
+
     model.train()
     return float(np.mean(ndcgs)) if ndcgs else float("nan")
 
