@@ -284,10 +284,15 @@ poetry.toml
 # Advisor generated databases (rebuilt from run files)
 ironclad_advisor/db/
 silent_advisor/db/
-ironclad_advisor/db/
+defect_advisor/db/
 watcher_advisor/db/
 
 # Training run logs (TensorBoard, etc.)
 runs/
+
+# train_all.py 生成的训练日志
+logs/
+advisor.log
+watcher_advisor.log
 
 # End of https://www.toptal.com/developers/gitignore/api/python,pycharm

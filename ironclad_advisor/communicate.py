@@ -387,25 +387,24 @@ def handle_shop(gs, floor, act, hp_pct, deck, relics, db, vocab,
     potion_prices = [p.get("price", 0) for p in shop_potions]
 
     all_items = avail_cards + avail_relics + avail_potions
-    all_prices = card_prices + relic_prices + potion_prices + [0]  # 0 for 不购买
     if not all_items:
         return
 
     gold = gs.get("gold", 0)
+    purge_cost = screen.get("purge_cost", 75)
 
-    # 显示用名称（优先本地化名）
+    # 显示用名称（优先本地化名）；与 shop_inference_features_v2 输出对齐：N+2 选项
     card_names = [c.get("name", c["id"]) for c in shop_cards]
     relic_names = [r.get("name", r["id"]) for r in shop_relics]
     potion_names = [p.get("name", p["id"]) for p in shop_potions]
-    option_labels = card_names + relic_names + potion_names + ["不购买"]
+    option_labels = card_names + relic_names + potion_names + ["移除卡牌", "不购买"]
+    all_prices = card_prices + relic_prices + potion_prices + [purge_cost, 0]
 
-    # 用 ID 做模型推理
+    # 用 ID 做模型推理；id_labels 供 CWR 查询，需与训练时一致（REMOVE 而非"移除卡牌"）
     item_ids = avail_cards + avail_relics + avail_potions
+    id_labels = item_ids + ["REMOVE", "不购买"]
 
     if v2_models is not None:
-        # predict_all_shop 内部用 option_labels 做 CWR 查询，但这里我们传 item_ids
-        # 需要先构造一个包含 "不购买" 的 ID 列表用于模型
-        id_labels = item_ids + ["不购买"]
         preds = predict_all_shop(id_labels, floor, act, hp_pct, gold,
                                  deck, relics, item_ids,
                                  db, vocab, v1_models, v2_models,
@@ -417,7 +416,6 @@ def handle_shop(gs, floor, act, hp_pct, deck, relics, db, vocab,
                                     num_upgrades, deck_upgrades)
         preds = predict_with_models(v1_models["shop"], X)
 
-    id_labels = item_ids + ["移除卡牌", "不购买"]
     if v3_models:
         preds.update(_predict_shop_v3(id_labels, floor, act, hp_pct, gold,
                                       deck, relics, item_ids,

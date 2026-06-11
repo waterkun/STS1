@@ -19,6 +19,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from sklearn.metrics import ndcg_score
 
 
 # ============================================================
@@ -170,6 +171,24 @@ def decisions_from_ranking_data(X, y, groups, decisions_w=None):
 # 训练函数
 # ============================================================
 
+@torch.no_grad()
+def _compute_val_ndcg(model, val_X, val_y, device):
+    """计算验证集平均 NDCG（跳过全相同标签的决策）。"""
+    model.eval()
+    ndcgs = []
+    for x, y in zip(val_X, val_y):
+        if len(np.unique(y)) < 2:
+            continue
+        x_t = torch.tensor(x, dtype=torch.float32, device=device)
+        scores = model(x_t).cpu().numpy()
+        try:
+            ndcgs.append(ndcg_score([y], [scores]))
+        except Exception:
+            pass
+    model.train()
+    return float(np.mean(ndcgs)) if ndcgs else float("nan")
+
+
 def _collate_decisions(batch_X, batch_y, device):
     """
     将一批变长决策 pad 成统一 tensor。
@@ -238,6 +257,22 @@ def train_transformer(decisions_X, decisions_y,
         decisions_X[i] = np.nan_to_num(decisions_X[i], nan=0.0, posinf=0.0, neginf=0.0)
         decisions_y[i] = np.nan_to_num(decisions_y[i], nan=0.0, posinf=0.0, neginf=0.0)
 
+    # 80/20 hold-out 验证集（按决策随机分割，seed 固定保证可复现）
+    n_total = len(decisions_X)
+    if n_total >= 10:
+        rng = np.random.default_rng(42)
+        perm = rng.permutation(n_total)
+        n_val = max(1, int(n_total * 0.2))
+        val_idx, train_idx = perm[:n_val], perm[n_val:]
+        val_X = [decisions_X[i] for i in val_idx]
+        val_y = [decisions_y[i] for i in val_idx]
+        decisions_X = [decisions_X[i] for i in train_idx]
+        decisions_y = [decisions_y[i] for i in train_idx]
+        if decisions_w is not None:
+            decisions_w = [decisions_w[i] for i in train_idx]
+    else:
+        val_X, val_y = None, None
+
     input_dim = decisions_X[0].shape[1]
 
     # 设备选择
@@ -248,13 +283,14 @@ def train_transformer(decisions_X, decisions_y,
         device = torch.device("cpu")
         print(f"  使用设备: CPU")
 
+    val_info = f", 验证集={len(val_X)}" if val_X is not None else ""
     if decisions_w is not None:
         w_arr = np.array(decisions_w, dtype=np.float32)
-        print(f"  Transformer {name}: {len(decisions_X)} 个决策, 特征维度={input_dim}, "
+        print(f"  Transformer {name}: 训练={len(decisions_X)}{val_info} 个决策, 特征维度={input_dim}, "
               f"d_model={d_model}, n_heads={n_heads}, n_layers={n_layers}, "
               f"权重范围: [{w_arr.min():.2f}, {w_arr.max():.2f}]")
     else:
-        print(f"  Transformer {name}: {len(decisions_X)} 个决策, 特征维度={input_dim}, "
+        print(f"  Transformer {name}: 训练={len(decisions_X)}{val_info} 个决策, 特征维度={input_dim}, "
               f"d_model={d_model}, n_heads={n_heads}, n_layers={n_layers}")
 
     # 按选项数分组排序，减少 padding 浪费
@@ -342,7 +378,11 @@ def train_transformer(decisions_X, decisions_y,
         if (epoch + 1) % 5 == 0 or epoch == 0:
             avg = total_loss / max(n_processed, 1)
             current_lr = scheduler.get_last_lr()[0]
-            print(f"    Epoch {epoch+1:>2d}/{n_epochs}  loss={avg:.4f}  lr={current_lr:.6f}")
+            if val_X is not None:
+                val_ndcg = _compute_val_ndcg(model, val_X, val_y, device)
+                print(f"    Epoch {epoch+1:>2d}/{n_epochs}  loss={avg:.4f}  val_ndcg={val_ndcg:.4f}  lr={current_lr:.6f}")
+            else:
+                print(f"    Epoch {epoch+1:>2d}/{n_epochs}  loss={avg:.4f}  lr={current_lr:.6f}")
 
     print(f"  Transformer {name} 训练完成")
 
