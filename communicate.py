@@ -322,21 +322,22 @@ def handle_shop(gs, floor, act, hp_pct, deck, relics, ctx):
     potion_prices = [p.get("price", 0) for p in shop_potions]
 
     all_items = avail_cards + avail_relics + avail_potions
-    all_prices = card_prices + relic_prices + potion_prices + [0]
     if not all_items:
         return
 
     gold = gs.get("gold", 0)
+    purge_cost = screen.get("purge_cost", 75)
 
     card_names = [c.get("name", c["id"]) for c in shop_cards]
     relic_names = [r.get("name", r["id"]) for r in shop_relics]
     potion_names = [p.get("name", p["id"]) for p in shop_potions]
-    option_labels = card_names + relic_names + potion_names + ["不购买"]
+    option_labels = card_names + relic_names + potion_names + ["移除卡牌", "不购买"]
+    all_prices = card_prices + relic_prices + potion_prices + [purge_cost, 0]
 
     item_ids = avail_cards + avail_relics + avail_potions
 
     if ctx["v2_models"] is not None:
-        id_labels = item_ids + ["不购买"]
+        id_labels = item_ids + ["移除卡牌", "不购买"]
         preds = ctx["predict_all_shop"](
             id_labels, floor, act, hp_pct, gold,
             deck, relics, item_ids,
@@ -352,7 +353,7 @@ def handle_shop(gs, floor, act, hp_pct, deck, relics, ctx):
 
     if ctx.get("v3_models") and "predict_v3_shop" in ctx:
         try:
-            id_labels = item_ids + ["不购买"]
+            id_labels = item_ids + ["移除卡牌", "不购买"]
             preds_v3 = ctx["predict_v3_shop"](
                 id_labels, floor, act, hp_pct, gold,
                 deck, relics, item_ids,

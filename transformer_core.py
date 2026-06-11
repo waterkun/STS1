@@ -137,21 +137,32 @@ class STSTransformerRanker(nn.Module):
 # 数据准备工具
 # ============================================================
 
-def decisions_from_ranking_data(X, y, groups):
+def decisions_from_ranking_data(X, y, groups, decisions_w=None):
     """
     将 V2 排序数据 (X, y, groups) 转换为逐决策列表。
 
     返回:
       decisions_X: list of (N_i, F) arrays
       decisions_y: list of (N_i,) label arrays
+      decisions_weights: list of float (每个决策的质量权重), 仅当 decisions_w 不为 None 时返回
     """
     decisions_X, decisions_y = [], []
+    decisions_weights = []
     start = 0
-    for g in groups:
+    for i, g in enumerate(groups):
         g = int(g)
         decisions_X.append(X[start: start + g].astype(np.float32))
         decisions_y.append(y[start: start + g].astype(np.float32))
+        if decisions_w is not None:
+            d = decisions_w[i]
+            asc = d.get("ascension_level", 0)
+            victory = d.get("victory", False)
+            asc_w = 0.3 + 0.7 * (asc / 20.0)
+            outcome_w = 1.2 if victory else 0.6
+            decisions_weights.append(asc_w * outcome_w)
         start += g
+    if decisions_w is not None:
+        return decisions_X, decisions_y, decisions_weights
     return decisions_X, decisions_y
 
 
@@ -190,12 +201,13 @@ def _collate_decisions(batch_X, batch_y, device):
 def train_transformer(decisions_X, decisions_y,
                       d_model=128, n_heads=4, d_ff=256, n_layers=2,
                       n_epochs=60, lr=5e-4, batch_size=128,
-                      name="model"):
+                      name="model", decisions_w=None):
     """
     训练一个 STSTransformerRanker。
 
     decisions_X: list of (N_i, F) feature arrays (每个决策一个)
     decisions_y: list of (N_i,) label arrays (2/1/0 相关性标签)
+    decisions_w: list of float (每个决策的质量权重), 可选
     返回: 训练好的 STSTransformerRanker (在 CPU 上)
     """
     if not decisions_X:
@@ -203,14 +215,23 @@ def train_transformer(decisions_X, decisions_y,
         return None
 
     # 过滤掉只有一个选项的决策
-    pairs = [(x, y) for x, y in zip(decisions_X, decisions_y) if len(x) >= 2]
-    if not pairs:
-        print(f"  {name}: 所有决策只有一个选项，跳过")
-        return None
-
-    decisions_X, decisions_y = zip(*pairs)
-    decisions_X = list(decisions_X)
-    decisions_y = list(decisions_y)
+    if decisions_w is not None:
+        triples = [(x, y, w) for x, y, w in zip(decisions_X, decisions_y, decisions_w) if len(x) >= 2]
+        if not triples:
+            print(f"  {name}: 所有决策只有一个选项，跳过")
+            return None
+        decisions_X, decisions_y, decisions_w = zip(*triples)
+        decisions_X = list(decisions_X)
+        decisions_y = list(decisions_y)
+        decisions_w = list(decisions_w)
+    else:
+        pairs = [(x, y) for x, y in zip(decisions_X, decisions_y) if len(x) >= 2]
+        if not pairs:
+            print(f"  {name}: 所有决策只有一个选项，跳过")
+            return None
+        decisions_X, decisions_y = zip(*pairs)
+        decisions_X = list(decisions_X)
+        decisions_y = list(decisions_y)
 
     # 清洗数据：替换 nan/inf
     for i in range(len(decisions_X)):
@@ -227,8 +248,14 @@ def train_transformer(decisions_X, decisions_y,
         device = torch.device("cpu")
         print(f"  使用设备: CPU")
 
-    print(f"  Transformer {name}: {len(decisions_X)} 个决策, 特征维度={input_dim}, "
-          f"d_model={d_model}, n_heads={n_heads}, n_layers={n_layers}")
+    if decisions_w is not None:
+        w_arr = np.array(decisions_w, dtype=np.float32)
+        print(f"  Transformer {name}: {len(decisions_X)} 个决策, 特征维度={input_dim}, "
+              f"d_model={d_model}, n_heads={n_heads}, n_layers={n_layers}, "
+              f"权重范围: [{w_arr.min():.2f}, {w_arr.max():.2f}]")
+    else:
+        print(f"  Transformer {name}: {len(decisions_X)} 个决策, 特征维度={input_dim}, "
+              f"d_model={d_model}, n_heads={n_heads}, n_layers={n_layers}")
 
     # 按选项数分组排序，减少 padding 浪费
     sorted_indices = sorted(range(len(decisions_X)),
@@ -266,6 +293,9 @@ def train_transformer(decisions_X, decisions_y,
 
             bX = [decisions_X[i] for i in batch_idx]
             bY = [decisions_y[i] for i in batch_idx]
+            if decisions_w is not None:
+                bW = torch.tensor([decisions_w[i] for i in batch_idx],
+                                  dtype=torch.float32, device=device)  # (B,)
             lengths = [x.shape[0] for x in bX]
 
             x_pad, y_pad, mask = _collate_decisions(bX, bY, device)
@@ -288,6 +318,10 @@ def train_transformer(decisions_X, decisions_y,
             # softplus(score_j - score_i) 对应 label_i > label_j 的对
             pair_loss = F.softplus(s_j - s_i)  # (B, N, N)
             pair_loss = pair_loss * pair_mask.float()
+            # 按决策权重缩放 pairwise loss
+            if decisions_w is not None:
+                # bW: (B,) → (B, 1, 1) 广播到 (B, N, N)
+                pair_loss = pair_loss * bW.unsqueeze(1).unsqueeze(2)
             n_pairs = pair_mask.float().sum()
             loss = pair_loss.sum() / n_pairs.clamp(min=1.0)
 

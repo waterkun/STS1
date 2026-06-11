@@ -167,6 +167,7 @@ def build_card_decisions(runs: list[dict]) -> dict:
 
     for run in runs:
         victory = run["victory"]
+        ascension = run.get("ascension_level", 0)
 
         for choice in run.get("card_choices", []):
             floor = choice["floor"]
@@ -206,6 +207,7 @@ def build_card_decisions(runs: list[dict]) -> dict:
                 "relics": relics,
                 "offered": offered,
                 "picked": picked,
+                "ascension_level": ascension,
                 "victory": victory,
             })
 
@@ -247,6 +249,7 @@ def build_boss_relic_decisions(runs: list[dict]) -> dict:
 
     for run in runs:
         victory = run["victory"]
+        ascension = run.get("ascension_level", 0)
 
         for i, boss_choice in enumerate(run.get("boss_relics", [])):
             act = i + 1
@@ -278,6 +281,7 @@ def build_boss_relic_decisions(runs: list[dict]) -> dict:
                 "relics_before": relics_before,
                 "offered": offered,
                 "picked": picked,
+                "ascension_level": ascension,
                 "victory": victory,
             })
 
@@ -323,6 +327,7 @@ def build_campfire_decisions(runs: list[dict]) -> dict:
 
     for run in runs:
         victory = run["victory"]
+        ascension = run.get("ascension_level", 0)
 
         for campfire in run.get("campfire_choices", []):
             floor = campfire["floor"]
@@ -372,6 +377,7 @@ def build_campfire_decisions(runs: list[dict]) -> dict:
                 "num_upgrades": num_upgrades,
                 "deck_upgrades": deck_upgrades,
                 "relics": relics,
+                "ascension_level": ascension,
                 "victory": victory,
             })
 
@@ -420,6 +426,7 @@ def build_shop_decisions(runs: list[dict]) -> dict:
 
     for run in runs:
         victory = run["victory"]
+        ascension = run.get("ascension_level", 0)
 
         purchase_floors = run.get("item_purchase_floors", [])
         purchases = run.get("items_purchased", [])
@@ -483,6 +490,7 @@ def build_shop_decisions(runs: list[dict]) -> dict:
                 "available_potions": available_potions,
                 "purchased": list(bought),
                 "purged_card": purge_by_floor.get(floor, [None])[0],
+                "ascension_level": ascension,
                 "victory": victory,
             })
 

@@ -99,34 +99,34 @@ def run_training_v3():
         pickle.dump(vocab, f)
 
     print("\n=== 训练卡牌 V3 Transformer ===")
-    X, y, groups = build_card_ranking_data(db, vocab)
+    X, y, groups, dw = build_card_ranking_data(db, vocab)
     print(f"  排序数据: {len(y)} 行, {len(groups)} 组")
-    dX, dy = decisions_from_ranking_data(X, y, groups)
-    model = train_transformer(dX, dy, name="card")
+    dX, dy, dWeights = decisions_from_ranking_data(X, y, groups, dw)
+    model = train_transformer(dX, dy, name="card", decisions_w=dWeights)
     if model:
         save_v3_model(model, "card_transformer_v3")
 
     print("\n=== 训练 Boss 遗物 V3 Transformer ===")
-    X, y, groups = build_boss_relic_ranking_data(db, vocab)
+    X, y, groups, dw = build_boss_relic_ranking_data(db, vocab)
     print(f"  排序数据: {len(y)} 行, {len(groups)} 组")
-    dX, dy = decisions_from_ranking_data(X, y, groups)
-    model = train_transformer(dX, dy, name="boss_relic")
+    dX, dy, dWeights = decisions_from_ranking_data(X, y, groups, dw)
+    model = train_transformer(dX, dy, name="boss_relic", decisions_w=dWeights)
     if model:
         save_v3_model(model, "boss_relic_transformer_v3")
 
     print("\n=== 训练篝火 V3 Transformer ===")
-    X, y, groups = build_campfire_ranking_data(db, vocab)
+    X, y, groups, dw = build_campfire_ranking_data(db, vocab)
     print(f"  排序数据: {len(y)} 行, {len(groups)} 组")
-    dX, dy = decisions_from_ranking_data(X, y, groups)
-    model = train_transformer(dX, dy, name="campfire")
+    dX, dy, dWeights = decisions_from_ranking_data(X, y, groups, dw)
+    model = train_transformer(dX, dy, name="campfire", decisions_w=dWeights)
     if model:
         save_v3_model(model, "campfire_transformer_v3")
 
     print("\n=== 训练商店 V3 Transformer ===")
-    X, y, groups = build_shop_ranking_data(db, vocab)
+    X, y, groups, dw = build_shop_ranking_data(db, vocab)
     print(f"  排序数据: {len(y)} 行, {len(groups)} 组")
-    dX, dy = decisions_from_ranking_data(X, y, groups)
-    model = train_transformer(dX, dy, name="shop")
+    dX, dy, dWeights = decisions_from_ranking_data(X, y, groups, dw)
+    model = train_transformer(dX, dy, name="shop", decisions_w=dWeights)
     if model:
         save_v3_model(model, "shop_transformer_v3")
 

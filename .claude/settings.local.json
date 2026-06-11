@@ -28,7 +28,8 @@
       "Bash(break)",
       "Bash(fi:*)",
       "Bash(done)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "mcp__ide__executeCode"
     ]
   }
 }

@@ -348,6 +348,7 @@ def build_card_ranking_data(db: dict, vocab: dict):
     rows = []
     labels = []
     groups = []
+    decisions_w = []
 
     for d in db["card_decisions"]["decisions"]:
         offered = d["offered"]
@@ -391,14 +392,16 @@ def build_card_ranking_data(db: dict, vocab: dict):
             group_size += 1
 
         groups.append(group_size)
+        decisions_w.append({"ascension_level": d.get("ascension_level", 0), "victory": d["victory"]})
 
-    return np.array(rows), np.array(labels), np.array(groups)
+    return np.array(rows), np.array(labels), np.array(groups), decisions_w
 
 
 def build_boss_relic_ranking_data(db: dict, vocab: dict):
     stats = db["boss_relic_decisions"]["stats"]
     relic_to_idx = vocab["relic_to_idx"]
     rows, labels, groups = [], [], []
+    decisions_w = []
 
     for d in db["boss_relic_decisions"]["decisions"]:
         offered = d["offered"]
@@ -439,12 +442,14 @@ def build_boss_relic_ranking_data(db: dict, vocab: dict):
             group_size += 1
 
         groups.append(group_size)
+        decisions_w.append({"ascension_level": d.get("ascension_level", 0), "victory": d["victory"]})
 
-    return np.array(rows), np.array(labels), np.array(groups)
+    return np.array(rows), np.array(labels), np.array(groups), decisions_w
 
 
 def build_campfire_ranking_data(db: dict, vocab: dict):
     rows, labels, groups = [], [], []
+    decisions_w = []
 
     for d in db["campfire_decisions"]["decisions"]:
         base = base_features(
@@ -476,8 +481,9 @@ def build_campfire_ranking_data(db: dict, vocab: dict):
             group_size += 1
 
         groups.append(group_size)
+        decisions_w.append({"ascension_level": d.get("ascension_level", 0), "victory": d["victory"]})
 
-    return np.array(rows), np.array(labels), np.array(groups)
+    return np.array(rows), np.array(labels), np.array(groups), decisions_w
 
 
 def build_shop_ranking_data(db: dict, vocab: dict):
@@ -485,6 +491,7 @@ def build_shop_ranking_data(db: dict, vocab: dict):
     card_to_idx = vocab["card_to_idx"]
     relic_to_idx = vocab["relic_to_idx"]
     rows, labels, groups = [], [], []
+    decisions_w = []
 
     for d in db["shop_decisions"]["decisions"]:
         base = base_features(
@@ -557,8 +564,9 @@ def build_shop_ranking_data(db: dict, vocab: dict):
             group_size += 1
 
         groups.append(group_size)
+        decisions_w.append({"ascension_level": d.get("ascension_level", 0), "victory": d["victory"]})
 
-    return np.array(rows), np.array(labels), np.array(groups)
+    return np.array(rows), np.array(labels), np.array(groups), decisions_w
 
 
 # ---------------------------------------------------------------------------
@@ -927,11 +935,37 @@ def predict_cwr_delta(options: list[str], context_key: str,
 
 
 # ---------------------------------------------------------------------------
+# 数据质量加权
+# ---------------------------------------------------------------------------
+
+def compute_sample_weights(decisions_w: list[dict], groups: np.ndarray) -> np.ndarray:
+    """为每个训练样本计算质量权重。
+
+    权重 = ascension_weight × outcome_weight
+    - ascension_weight: 0.3 + 0.7 * (ascension_level / 20.0)
+    - outcome_weight: 1.2 if victory else 0.6
+    """
+    weights = []
+    d_idx = 0
+    for g_size in groups:
+        d = decisions_w[d_idx]
+        asc = d.get("ascension_level", 0)
+        victory = d.get("victory", False)
+        asc_w = 0.3 + 0.7 * (asc / 20.0)
+        outcome_w = 1.2 if victory else 0.6
+        w = asc_w * outcome_w
+        weights.extend([w] * int(g_size))
+        d_idx += 1
+    return np.array(weights, dtype=np.float32)
+
+
+# ---------------------------------------------------------------------------
 # 训练
 # ---------------------------------------------------------------------------
 
 def train_ranking_model(X: np.ndarray, y: np.ndarray,
-                        groups: np.ndarray, name: str):
+                        groups: np.ndarray, name: str,
+                        sample_weight: np.ndarray | None = None):
     """训练 LGBMRanker 并用 GroupKFold 交叉验证。"""
     if lgb is None:
         print(f"  LightGBM 未安装，跳过 {name} 排序模型")
@@ -975,6 +1009,7 @@ def train_ranking_model(X: np.ndarray, y: np.ndarray,
         sort_idx = np.argsort(group_ids[train_idx])
         X_train = X_train[sort_idx]
         y_train = y_train[sort_idx]
+        w_train = sample_weight[train_idx][sort_idx] if sample_weight is not None else None
 
         model = lgb.LGBMRanker(
             objective="lambdarank",
@@ -990,7 +1025,8 @@ def train_ranking_model(X: np.ndarray, y: np.ndarray,
             verbose=-1,
             device="gpu",
         )
-        model.fit(X_train, y_train, group=train_group_sizes)
+        model.fit(X_train, y_train, group=train_group_sizes,
+                  sample_weight=w_train)
         models.append(model)
 
         # 评估: 计算 validation 组的 NDCG
@@ -1021,7 +1057,8 @@ def train_ranking_model(X: np.ndarray, y: np.ndarray,
     return models
 
 
-def train_choice_model(X: np.ndarray, y: np.ndarray, name: str):
+def train_choice_model(X: np.ndarray, y: np.ndarray, name: str,
+                       sample_weight: np.ndarray | None = None):
     """训练 Logistic Regression 选择模型。"""
     if len(X) == 0:
         print(f"  {name}: 无训练数据，跳过")
@@ -1041,7 +1078,10 @@ def train_choice_model(X: np.ndarray, y: np.ndarray, name: str):
             random_state=42,
         )),
     ])
-    pipe.fit(X, y)
+    fit_params = {}
+    if sample_weight is not None:
+        fit_params["logreg__sample_weight"] = sample_weight
+    pipe.fit(X, y, **fit_params)
 
     train_proba = pipe.predict_proba(X)[:, 1]
     train_acc = np.mean((train_proba > 0.5).astype(int) == y)
@@ -1449,16 +1489,19 @@ def run_training_v2():
     print("\n=== 训练卡牌 V2 模型 ===")
 
     print("  构造排序数据...")
-    X_rank, y_rank, groups = build_card_ranking_data(db, vocab)
-    print(f"  排序数据: {len(y_rank)} 行, {len(groups)} 组")
-    card_ranker = train_ranking_model(X_rank, y_rank, groups, "card")
+    X_rank, y_rank, groups, dw_card = build_card_ranking_data(db, vocab)
+    sw_card = compute_sample_weights(dw_card, groups)
+    print(f"  排序数据: {len(y_rank)} 行, {len(groups)} 组, 权重范围: [{sw_card.min():.2f}, {sw_card.max():.2f}]")
+    card_ranker = train_ranking_model(X_rank, y_rank, groups, "card",
+                                      sample_weight=sw_card)
     if card_ranker:
         save_v2_model(card_ranker, "card_lambdamart")
 
     print("  构造选择数据...")
     X_choice, y_choice = build_card_choice_data(db, vocab)
     print(f"  选择数据: {len(y_choice)} 行, 正样本: {y_choice.sum()}")
-    card_logreg = train_choice_model(X_choice, y_choice, "card")
+    card_logreg = train_choice_model(X_choice, y_choice, "card",
+                                     sample_weight=sw_card)
     if card_logreg:
         save_v2_model(card_logreg, "card_logreg")
 
@@ -1469,15 +1512,18 @@ def run_training_v2():
     # === Boss 遗物 ===
     print("\n=== 训练 Boss 遗物 V2 模型 ===")
 
-    X_rank, y_rank, groups = build_boss_relic_ranking_data(db, vocab)
-    print(f"  排序数据: {len(y_rank)} 行, {len(groups)} 组")
-    boss_ranker = train_ranking_model(X_rank, y_rank, groups, "boss_relic")
+    X_rank, y_rank, groups, dw_boss = build_boss_relic_ranking_data(db, vocab)
+    sw_boss = compute_sample_weights(dw_boss, groups)
+    print(f"  排序数据: {len(y_rank)} 行, {len(groups)} 组, 权重范围: [{sw_boss.min():.2f}, {sw_boss.max():.2f}]")
+    boss_ranker = train_ranking_model(X_rank, y_rank, groups, "boss_relic",
+                                      sample_weight=sw_boss)
     if boss_ranker:
         save_v2_model(boss_ranker, "boss_relic_lambdamart")
 
     X_choice, y_choice = build_boss_relic_choice_data(db, vocab)
     print(f"  选择数据: {len(y_choice)} 行, 正样本: {y_choice.sum()}")
-    boss_logreg = train_choice_model(X_choice, y_choice, "boss_relic")
+    boss_logreg = train_choice_model(X_choice, y_choice, "boss_relic",
+                                     sample_weight=sw_boss)
     if boss_logreg:
         save_v2_model(boss_logreg, "boss_relic_logreg")
 
@@ -1487,15 +1533,18 @@ def run_training_v2():
     # === 篝火 ===
     print("\n=== 训练篝火 V2 模型 ===")
 
-    X_rank, y_rank, groups = build_campfire_ranking_data(db, vocab)
-    print(f"  排序数据: {len(y_rank)} 行, {len(groups)} 组")
-    camp_ranker = train_ranking_model(X_rank, y_rank, groups, "campfire")
+    X_rank, y_rank, groups, dw_camp = build_campfire_ranking_data(db, vocab)
+    sw_camp = compute_sample_weights(dw_camp, groups)
+    print(f"  排序数据: {len(y_rank)} 行, {len(groups)} 组, 权重范围: [{sw_camp.min():.2f}, {sw_camp.max():.2f}]")
+    camp_ranker = train_ranking_model(X_rank, y_rank, groups, "campfire",
+                                      sample_weight=sw_camp)
     if camp_ranker:
         save_v2_model(camp_ranker, "campfire_lambdamart")
 
     X_choice, y_choice = build_campfire_choice_data(db, vocab)
     print(f"  选择数据: {len(y_choice)} 行, 正样本: {y_choice.sum()}")
-    camp_logreg = train_choice_model(X_choice, y_choice, "campfire")
+    camp_logreg = train_choice_model(X_choice, y_choice, "campfire",
+                                     sample_weight=sw_camp)
     if camp_logreg:
         save_v2_model(camp_logreg, "campfire_logreg")
 
@@ -1505,20 +1554,90 @@ def run_training_v2():
     # === 商店 ===
     print("\n=== 训练商店 V2 模型 ===")
 
-    X_rank, y_rank, groups = build_shop_ranking_data(db, vocab)
-    print(f"  排序数据: {len(y_rank)} 行, {len(groups)} 组")
-    shop_ranker = train_ranking_model(X_rank, y_rank, groups, "shop")
+    X_rank, y_rank, groups, dw_shop = build_shop_ranking_data(db, vocab)
+    sw_shop = compute_sample_weights(dw_shop, groups)
+    print(f"  排序数据: {len(y_rank)} 行, {len(groups)} 组, 权重范围: [{sw_shop.min():.2f}, {sw_shop.max():.2f}]")
+    shop_ranker = train_ranking_model(X_rank, y_rank, groups, "shop",
+                                      sample_weight=sw_shop)
     if shop_ranker:
         save_v2_model(shop_ranker, "shop_lambdamart")
 
     X_choice, y_choice = build_shop_choice_data(db, vocab)
     print(f"  选择数据: {len(y_choice)} 行, 正样本: {y_choice.sum()}")
-    shop_logreg = train_choice_model(X_choice, y_choice, "shop")
+    shop_logreg = train_choice_model(X_choice, y_choice, "shop",
+                                     sample_weight=sw_shop)
     if shop_logreg:
         save_v2_model(shop_logreg, "shop_logreg")
 
     shop_cwr = compute_shop_cwr_stats(db)
     save_v2_model(shop_cwr, "shop_cwr")
+
+    # === 行为对齐评估 ===
+    import warnings
+    print("\n=== 行为对齐评估 ===")
+    v2_models = load_v2_models()
+
+    for dtype, build_fn, dw_list, label in [
+        ("card", build_card_ranking_data, dw_card, "卡牌"),
+        ("boss_relic", build_boss_relic_ranking_data, dw_boss, "Boss遗物"),
+        ("campfire", build_campfire_ranking_data, dw_camp, "篝火"),
+        ("shop", build_shop_ranking_data, dw_shop, "商店"),
+    ]:
+        lmart_key = f"{dtype}_lambdamart"
+        if lmart_key not in v2_models:
+            continue
+
+        X_eval, y_eval, g_eval, dw_eval = build_fn(db, vocab)
+        models_list = v2_models[lmart_key]
+
+        # 批量预测所有样本，避免逐组调用产生大量警告
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            all_scores = np.mean([m.predict(X_eval) for m in models_list], axis=0)
+
+        top1_all, top3_all, mrr_all = 0, 0, 0.0
+        top1_a20, top3_a20, mrr_a20 = 0, 0, 0.0
+        n_all, n_a20 = 0, 0
+        start = 0
+
+        for i, g in enumerate(g_eval):
+            g = int(g)
+            y_group = y_eval[start:start + g]
+            scores_group = all_scores[start:start + g]
+            start += g
+
+            picked_idx = np.argmax(y_group)
+            if y_group[picked_idx] == 0:
+                continue
+
+            ranked = np.argsort(-scores_group)
+            rank_of_picked = np.where(ranked == picked_idx)[0][0] + 1
+
+            n_all += 1
+            if rank_of_picked == 1:
+                top1_all += 1
+            if rank_of_picked <= 3:
+                top3_all += 1
+            mrr_all += 1.0 / rank_of_picked
+
+            if dw_eval[i].get("ascension_level", 0) == 20:
+                n_a20 += 1
+                if rank_of_picked == 1:
+                    top1_a20 += 1
+                if rank_of_picked <= 3:
+                    top3_a20 += 1
+                mrr_a20 += 1.0 / rank_of_picked
+
+        if n_all > 0:
+            print(f"\n  [{label}] 全量 (n={n_all}):")
+            print(f"    Top-1 Accuracy: {top1_all/n_all:.4f}")
+            print(f"    Top-3 Accuracy: {top3_all/n_all:.4f}")
+            print(f"    MRR:            {mrr_all/n_all:.4f}")
+        if n_a20 > 0:
+            print(f"  [{label}] A20 子集 (n={n_a20}):")
+            print(f"    Top-1 Accuracy: {top1_a20/n_a20:.4f}")
+            print(f"    Top-3 Accuracy: {top3_a20/n_a20:.4f}")
+            print(f"    MRR:            {mrr_a20/n_a20:.4f}")
 
     print("\nV2 训练完成！")
 
