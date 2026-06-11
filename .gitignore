@@ -287,6 +287,12 @@ silent_advisor/db/
 defect_advisor/db/
 watcher_advisor/db/
 
+# Trained model files (rebuilt by train_all.py)
+ironclad_advisor/models/
+silent_advisor/models/
+defect_advisor/models/
+watcher_advisor/models/
+
 # Training run logs (TensorBoard, etc.)
 runs/
 
