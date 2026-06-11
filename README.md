@@ -40,7 +40,7 @@
 | Boss 遗物决策样本 | 16,185 条 | 12,870 条 | — | 6,423 条 |
 | 商店决策样本 | 706 条 | 602 条 | — | 543 条 |
 
-### 模型架构（三代演进）
+### 模型架构（四代演进）
 
 #### V1 — 二分类（XGBoost / LightGBM）
 
@@ -68,7 +68,7 @@ V2 在 V1 基础上新增特征（观者为例）：
 - 时序特征（8 维）：act 内进度、距 boss 楼层数、精英区标记、HP 分桶
 - 候选卡在卡组中已有数量（防止推荐重复）
 
-#### V3 — Transformer 集合排序（PyTorch）
+#### V3 — Transformer 集合排序（PyTorch，全量数据）
 
 **核心改进**：V1/V2 对每个候选选项独立打分，无法感知同一决策中其他候选项的存在。V3 通过自注意力机制，让每个选项的评分受整个候选集影响，从而捕捉**选项间的机会成本与相对价值**。
 
@@ -77,9 +77,10 @@ V2 在 V1 基础上新增特征（观者为例）：
 ```
 输入 (N, F)
   → Linear(F, d_model=128)           # 投影到隐空间
+  → Dropout(0.1)
   → 2 × TransformerBlock(Pre-Norm)   # 自注意力 + FFN
-      LN → MultiHeadAttention(4头)→ 残差
-      LN → FFN(d_ff=256, ReLU)    → 残差
+      LN → MultiHeadAttention(4头) → Dropout → 残差
+      LN → FFN(d_ff=256, ReLU)     → Dropout → 残差
   → Linear(d_model, 1)               # 每个选项输出一个分数
   → softmax                          # 归一化为概率 (N,)
 ```
@@ -87,24 +88,37 @@ V2 在 V1 基础上新增特征（观者为例）：
 其中 N = 本次决策的候选选项数（卡牌奖励 N≈3，Boss 遗物 N=3，篝火 N=2，商店 N=5~10）。
 
 **训练细节**：
-- 损失函数：**ListNet loss**（KL 散度形式）—— 标签经 softmax 软化后与预测分布做交叉熵，对「选了但没赢」的情况梯度更平滑
-- 标签来源：复用 V2 排序标签（2 / 1 / 0）
+- 损失函数：**Pairwise Margin Loss**（softplus 形式）—— 对每对 `label_i > label_j` 的选项计算 `softplus(score_j - score_i)`，按标签差值（`label_i - label_j`）加权，使高置信度排序对（如 2vs0）获得两倍于低置信度对（2vs1 或 1vs0）的梯度信号
+- 标签：2=选了且赢 / 1=选了且输 / 0=没选，按 `(0.3 + 0.7×asc/20) × (1.2 if win else 0.6)` 对每个决策加权（高阶胜局权重更高）
 - 变长候选集处理：padding + `key_padding_mask` 屏蔽 padding 位置的注意力
-- Batch 内按候选数排序后局部打乱，减少 padding 浪费
-- 优化器：Adam，CosineAnnealingLR（60 epochs，lr 从 5e-4 → 5e-6）
+- LR 调度：前 5 epoch 线性 warmup（0.2→1.0），之后 cosine decay 至 1%（共 60 epoch）
 - 梯度裁剪：`clip_grad_norm_(max_norm=1.0)`
 - 训练用 CUDA（若可用），推理时模型移回 CPU 序列化
 
 **后处理**：对卡组中已有的能力牌（Power）候选项施加 ×0.5 重复惩罚，避免推荐无意义的重复能力牌。
 
+#### V4 — A20 胜局专用 Transformer（仅学习顶级策略）
+
+**核心区别**：V3 从所有对局（包括失败局）中学习，V4 **只使用 Ascension 20 胜利对局**训练，从不接触失败数据，专注提炼最高水平的策略。
+
+| 维度 | V3 | V4 |
+|------|----|----|
+| 训练数据 | 全部对局（所有 Ascension，含失败局） | 仅 A20 胜局 |
+| 标签 | 2=选了且赢 / 1=选了且输 / 0=没选 | 2=选了 / 0=没选（全是胜局，无 label=1） |
+| 决策加权 | 按 asc×胜负 加权 | 无加权（数据本身已是最高质量） |
+| 架构 | 同 `transformer_core.py` | 同 V3（共用相同代码） |
+| 模型文件 | `*_transformer_v3.pt` | `*_transformer_v4.pt` |
+
+V4 数据量远少于 V3（仅 A20 胜局），但信噪比更高，代表了「顶级玩家在最高难度下的真实选择」。
+
 ### 已训练模型状态
 
-| 角色 | V1 (XGB/LGB) | V2 (LambdaMART/LogReg/CWR) | V3 (Transformer) |
-|------|:---:|:---:|:---:|
-| 铁甲战士 | ✓ | ✓ | ✓ |
-| 静默猎手 | — | ✓ | ✓ |
-| 机器人 | — | — | ✓ |
-| 观者 | ✓ | ✓ | 未训练 |
+| 角色 | V1 (XGB/LGB) | V2 (LambdaMART/LogReg/CWR) | V3 (Transformer) | V4 (A20 Transformer) |
+|------|:---:|:---:|:---:|:---:|
+| 铁甲战士 | ✓ | ✓ | ✓ | 待训练 |
+| 静默猎手 | — | ✓ | ✓ | 待训练 |
+| 机器人 | — | — | ✓ | 待训练 |
+| 观者 | ✓ | ✓ | 待训练 | 待训练 |
 
 ### 特征工程（基础特征，所有模型共享）
 
@@ -150,25 +164,29 @@ python -m watcher_advisor.build_db
 ### 训练模型
 
 ```shell
-# 铁甲战士（全部三代）
+# 铁甲战士（全部四代）
 python -m ironclad_advisor.ml_advisor train       # V1: XGBoost + LightGBM
 python -m ironclad_advisor.ml_advisor_v2 train    # V2: LambdaMART + LogReg + CWR
-python -m ironclad_advisor.ml_advisor_v3 train    # V3: Transformer
+python -m ironclad_advisor.ml_advisor_v3 train    # V3: Transformer（全量数据）
+python -m ironclad_advisor.ml_advisor_v4 train    # V4: Transformer（仅 A20 胜局）
 
 # 静默猎手
 python -m silent_advisor.ml_advisor train
 python -m silent_advisor.ml_advisor_v2 train
 python -m silent_advisor.ml_advisor_v3 train
+python -m silent_advisor.ml_advisor_v4 train
 
 # 机器人
 python -m defect_advisor.ml_advisor train
 python -m defect_advisor.ml_advisor_v2 train
 python -m defect_advisor.ml_advisor_v3 train
+python -m defect_advisor.ml_advisor_v4 train
 
 # 观者
 python -m watcher_advisor.ml_advisor train
 python -m watcher_advisor.ml_advisor_v2 train
-python -m watcher_advisor.ml_advisor_v3 train    # V3 尚未训练，运行此命令生成
+python -m watcher_advisor.ml_advisor_v3 train
+python -m watcher_advisor.ml_advisor_v4 train
 ```
 
 ### CLI 推理
@@ -188,8 +206,15 @@ python -m ironclad_advisor.ml_advisor_v2 card \
   --deck "Strike_R x4,Defend_R x4,Bash,Iron Wave,Shrug It Off" \
   --options "Barricade,Feel No Pain,Pommel Strike"
 
-# 卡牌奖励建议 — V3 Transformer
+# 卡牌奖励建议 — V3 Transformer（全量数据）
 python -m ironclad_advisor.ml_advisor_v3 card \
+  --floor 8 --act 1 --hp 45 --max-hp 80 \
+  --relics "Burning Blood,Bag of Marbles" \
+  --deck "Strike_R x4,Defend_R x4,Bash,Iron Wave,Shrug It Off" \
+  --options "Barricade,Feel No Pain,Pommel Strike"
+
+# 卡牌奖励建议 — V4 Transformer（仅 A20 胜局）
+python -m ironclad_advisor.ml_advisor_v4 card \
   --floor 8 --act 1 --hp 45 --max-hp 80 \
   --relics "Burning Blood,Bag of Marbles" \
   --deck "Strike_R x4,Defend_R x4,Bash,Iron Wave,Shrug It Off" \
@@ -237,14 +262,15 @@ python communicate.py
 
 ```
 STS1/
-├── transformer_core.py      # V3 共享核心：PyTorch Transformer 排序模型（四角色共用）
+├── transformer_core.py      # V3/V4 共享核心：PyTorch Transformer 排序模型（四角色共用）
 ├── communicate.py           # 统一 CommunicationMod 入口（自动识别角色）
 ├── ironclad_advisor/        # 铁甲战士 ML 顾问
 │   ├── build_db.py          # 决策数据库构建（解析 .run 文件）
 │   ├── ml_advisor.py        # V1：XGBoost + LightGBM 二分类（5-fold CV）
 │   ├── ml_advisor_v2.py     # V2：LambdaMART + LogReg + CWR-Delta
-│   ├── ml_advisor_v3.py     # V3：Transformer 自注意力排序
-│   ├── communicate.py       # CommunicationMod 实时集成
+│   ├── ml_advisor_v3.py     # V3：Transformer（全量数据，Pairwise Margin Loss）
+│   ├── ml_advisor_v4.py     # V4：Transformer（仅 A20 胜局，最高质量信号）
+│   ├── communicate.py       # CommunicationMod 实时集成（含 V3/V4）
 │   ├── db/                  # 生成的决策数据库（JSON）
 │   └── models/              # 训练好的模型（.pkl / .pt）
 ├── silent_advisor/          # 静默猎手 ML 顾问（结构同上）
@@ -274,7 +300,7 @@ STS1/
 ## 技术栈
 
 - **Python 3.10+** — 主语言
-- **PyTorch** — V3 Transformer 模型（Pre-Norm 编码器、ListNet loss、Adam + CosineAnnealingLR）
+- **PyTorch** — V3/V4 Transformer 模型（Pre-Norm 编码器、Pairwise Margin Loss、Adam + Warmup + Cosine Decay）
 - **XGBoost** — V1 梯度提升分类器（GPU 加速）
 - **LightGBM** — V1 分类 + V2 LambdaMART 排序（GPU 加速）
 - **scikit-learn** — Logistic Regression、交叉验证、评估指标（AUC、NDCG）
@@ -289,8 +315,10 @@ STS1/
 - [x] 机器人 AI 顾问（V3 训练完成）
 - [x] 观者 AI 顾问（V1 + V2 训练完成）
 - [x] 重复能力牌惩罚机制
-- [x] V3 PyTorch Transformer（自注意力，候选选项互相感知，ListNet loss）
-- [ ] 观者 V3 Transformer 训练
+- [x] V3 PyTorch Transformer（自注意力，候选选项互相感知，Pairwise Margin Loss + label-diff 加权）
+- [x] V4 A20 胜局专用 Transformer（仅学习顶级胜局策略，永不从失败中学习）
+- [x] V3/V4 集成至 communicate.py（全部四角色，Borda Count 投票）
+- [ ] 观者 / 机器人 V3 + V4 Transformer 训练
 - [ ] 静默猎手 / 机器人 V1 模型训练
 
 ## 许可证

@@ -123,10 +123,12 @@ _ENGINE_LABELS = {
     "lambdamart": "LambdaMR",
     "logreg": "LogReg",
     "cwr_delta": "CWR",
-    "transformer": "Transf.",
+    "transformer": "TransV3",
+    "transformer_v4": "TransV4",
 }
 
-_ENGINE_ORDER = ["xgboost", "lightgbm", "lambdamart", "logreg", "cwr_delta", "transformer"]
+_ENGINE_ORDER = ["xgboost", "lightgbm", "lambdamart", "logreg", "cwr_delta",
+                 "transformer", "transformer_v4"]
 
 _NAME_COL_WIDTH = 24
 
@@ -221,11 +223,19 @@ def handle_card_reward(gs, floor, act, hp_pct, deck, relics, ctx):
 
     if ctx.get("v3_models") and "predict_v3_card" in ctx:
         try:
-            preds_v3 = ctx["predict_v3_card"](
+            preds.update(ctx["predict_v3_card"](
                 card_ids, floor, act, hp_pct, deck, relics,
                 ctx["db"], ctx["vocab"], ctx["v3_models"],
-                ctx["num_upgrades"], ctx["deck_upgrades"])
-            preds.update(preds_v3)
+                ctx["num_upgrades"], ctx["deck_upgrades"]))
+        except Exception:
+            pass
+
+    if ctx.get("v4_models") and "predict_v4_card" in ctx:
+        try:
+            preds.update(ctx["predict_v4_card"](
+                card_ids, floor, act, hp_pct, deck, relics,
+                ctx["db"], ctx["vocab"], ctx["v4_models"],
+                ctx["num_upgrades"], ctx["deck_upgrades"]))
         except Exception:
             pass
 
@@ -249,11 +259,19 @@ def handle_campfire(gs, floor, act, hp_pct, deck, relics, ctx):
 
     if ctx.get("v3_models") and "predict_v3_campfire" in ctx:
         try:
-            preds_v3 = ctx["predict_v3_campfire"](
+            preds.update(ctx["predict_v3_campfire"](
                 floor, act, hp_pct, deck, relics,
                 ctx["db"], ctx["vocab"], ctx["v3_models"],
-                ctx["num_upgrades"], ctx["deck_upgrades"])
-            preds.update(preds_v3)
+                ctx["num_upgrades"], ctx["deck_upgrades"]))
+        except Exception:
+            pass
+
+    if ctx.get("v4_models") and "predict_v4_campfire" in ctx:
+        try:
+            preds.update(ctx["predict_v4_campfire"](
+                floor, act, hp_pct, deck, relics,
+                ctx["db"], ctx["vocab"], ctx["v4_models"],
+                ctx["num_upgrades"], ctx["deck_upgrades"]))
         except Exception:
             pass
 
@@ -291,11 +309,19 @@ def handle_boss_relic(gs, act, hp_pct, deck, relics, ctx):
 
     if ctx.get("v3_models") and "predict_v3_boss_relic" in ctx:
         try:
-            preds_v3 = ctx["predict_v3_boss_relic"](
+            preds.update(ctx["predict_v3_boss_relic"](
                 relic_ids, act, hp_pct, deck, relics,
                 ctx["db"], ctx["vocab"], ctx["v3_models"],
-                ctx["num_upgrades"], ctx["deck_upgrades"])
-            preds.update(preds_v3)
+                ctx["num_upgrades"], ctx["deck_upgrades"]))
+        except Exception:
+            pass
+
+    if ctx.get("v4_models") and "predict_v4_boss_relic" in ctx:
+        try:
+            preds.update(ctx["predict_v4_boss_relic"](
+                relic_ids, act, hp_pct, deck, relics,
+                ctx["db"], ctx["vocab"], ctx["v4_models"],
+                ctx["num_upgrades"], ctx["deck_upgrades"]))
         except Exception:
             pass
 
@@ -351,15 +377,24 @@ def handle_shop(gs, floor, act, hp_pct, deck, relics, ctx):
             ctx["num_upgrades"], ctx["deck_upgrades"])
         preds = ctx["predict_with_models"](ctx["v1_models"]["shop"], X)
 
+    id_labels = item_ids + ["移除卡牌", "不购买"]
     if ctx.get("v3_models") and "predict_v3_shop" in ctx:
         try:
-            id_labels = item_ids + ["移除卡牌", "不购买"]
-            preds_v3 = ctx["predict_v3_shop"](
+            preds.update(ctx["predict_v3_shop"](
                 id_labels, floor, act, hp_pct, gold,
                 deck, relics, item_ids,
                 ctx["db"], ctx["vocab"], ctx["v3_models"],
-                ctx["num_upgrades"], ctx["deck_upgrades"])
-            preds.update(preds_v3)
+                ctx["num_upgrades"], ctx["deck_upgrades"]))
+        except Exception:
+            pass
+
+    if ctx.get("v4_models") and "predict_v4_shop" in ctx:
+        try:
+            preds.update(ctx["predict_v4_shop"](
+                id_labels, floor, act, hp_pct, gold,
+                deck, relics, item_ids,
+                ctx["db"], ctx["vocab"], ctx["v4_models"],
+                ctx["num_upgrades"], ctx["deck_upgrades"]))
         except Exception:
             pass
 
@@ -441,6 +476,27 @@ def load_advisor(character: str) -> dict | None:
             log(f"[LOAD] {character} V3 模型加载失败:\n{traceback.format_exc()}")
             v3_models = None
 
+    # V4: A20 胜局专用 Transformer
+    v4_mod = None
+    try:
+        v4_mod = importlib.import_module(f"{pkg}.ml_advisor_v4")
+        log(f"[LOAD] {pkg}.ml_advisor_v4 导入成功")
+    except Exception:
+        log(f"[LOAD] {pkg}.ml_advisor_v4 导入失败 (跳过 V4):\n{traceback.format_exc()}")
+
+    v4_models = None
+    if v4_mod is not None:
+        try:
+            v4_models = v4_mod.load_v4_models()
+            if v4_models:
+                log(f"[LOAD] {character} V4 模型加载完毕: {list(v4_models.keys())}")
+            else:
+                log(f"[LOAD] {character} V4 模型文件不存在，跳过。")
+                v4_models = None
+        except Exception:
+            log(f"[LOAD] {character} V4 模型加载失败:\n{traceback.format_exc()}")
+            v4_models = None
+
     ctx = {
         "character": character,
         "db": db,
@@ -448,6 +504,7 @@ def load_advisor(character: str) -> dict | None:
         "v1_models": v1_models,
         "v2_models": v2_models,
         "v3_models": v3_models,
+        "v4_models": v4_models,
         # v1 函数
         "predict_with_models": v1_mod.predict_with_models,
         "card_inference_features": v1_mod.card_inference_features,
@@ -469,6 +526,13 @@ def load_advisor(character: str) -> dict | None:
         ctx["predict_v3_campfire"] = v3_mod.predict_all_campfire
         ctx["predict_v3_boss_relic"] = v3_mod.predict_all_boss_relic
         ctx["predict_v3_shop"] = v3_mod.predict_all_shop
+
+    # v4 函数（可能不存在）
+    if v4_mod is not None:
+        ctx["predict_v4_card"] = v4_mod.predict_all_card
+        ctx["predict_v4_campfire"] = v4_mod.predict_all_campfire
+        ctx["predict_v4_boss_relic"] = v4_mod.predict_all_boss_relic
+        ctx["predict_v4_shop"] = v4_mod.predict_all_shop
 
     log(f"[LOAD] {character} advisor 加载完毕。")
     return ctx

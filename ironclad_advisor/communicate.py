@@ -80,6 +80,36 @@ try:
 except Exception:
     log(f"[BOOT] v2 import FAILED (will use v1 only):\n{traceback.format_exc()}")
 
+_v3_available = False
+try:
+    log("[BOOT] importing ml_advisor_v3...")
+    from ironclad_advisor.ml_advisor_v3 import (
+        load_v3_models,
+        predict_all_card as _predict_card_v3,
+        predict_all_campfire as _predict_campfire_v3,
+        predict_all_boss_relic as _predict_boss_relic_v3,
+        predict_all_shop as _predict_shop_v3,
+    )
+    _v3_available = True
+    log("[BOOT] v3 import OK")
+except Exception:
+    log(f"[BOOT] v3 import FAILED (will skip):\n{traceback.format_exc()}")
+
+_v4_available = False
+try:
+    log("[BOOT] importing ml_advisor_v4...")
+    from ironclad_advisor.ml_advisor_v4 import (
+        load_v4_models,
+        predict_all_card as _predict_card_v4,
+        predict_all_campfire as _predict_campfire_v4,
+        predict_all_boss_relic as _predict_boss_relic_v4,
+        predict_all_shop as _predict_shop_v4,
+    )
+    _v4_available = True
+    log("[BOOT] v4 import OK")
+except Exception:
+    log(f"[BOOT] v4 import FAILED (will skip):\n{traceback.format_exc()}")
+
 
 # ---------------------------------------------------------------------------
 # CommunicationMod 协议 I/O
@@ -149,10 +179,13 @@ _ENGINE_LABELS = {
     "lambdamart": "LambdaMR",
     "logreg": "LogReg",
     "cwr_delta": "CWR",
+    "transformer": "TransV3",
+    "transformer_v4": "TransV4",
 }
 
 # 展示列的固定顺序
-_ENGINE_ORDER = ["xgboost", "lightgbm", "lambdamart", "logreg", "cwr_delta"]
+_ENGINE_ORDER = ["xgboost", "lightgbm", "lambdamart", "logreg", "cwr_delta",
+                 "transformer", "transformer_v4"]
 
 _NAME_COL_WIDTH = 24
 
@@ -228,7 +261,8 @@ def print_predictions(options: list[str], preds: dict,
 # ---------------------------------------------------------------------------
 
 def handle_card_reward(gs, floor, act, hp_pct, deck, relics, db, vocab,
-                       v1_models, v2_models, num_upgrades=0, deck_upgrades=None):
+                       v1_models, v2_models, v3_models=None, v4_models=None,
+                       num_upgrades=0, deck_upgrades=None):
     screen = gs.get("screen_state", {})
     cards = screen.get("cards", [])
 
@@ -256,6 +290,13 @@ def handle_card_reward(gs, floor, act, hp_pct, deck, relics, db, vocab,
                                     num_upgrades, deck_upgrades)
         preds = predict_with_models(v1_models["card"], X)
 
+    if v3_models:
+        preds.update(_predict_card_v3(card_ids, floor, act, hp_pct, deck, relics,
+                                      db, vocab, v3_models, num_upgrades, deck_upgrades))
+    if v4_models:
+        preds.update(_predict_card_v4(card_ids, floor, act, hp_pct, deck, relics,
+                                      db, vocab, v4_models, num_upgrades, deck_upgrades))
+
     hp = gs.get("current_hp", 0)
     max_hp = gs.get("max_hp", 1)
     print_header(floor, act, hp, max_hp, "卡牌奖励")
@@ -263,7 +304,8 @@ def handle_card_reward(gs, floor, act, hp_pct, deck, relics, db, vocab,
 
 
 def handle_campfire(gs, floor, act, hp_pct, deck, relics, db, vocab,
-                    v1_models, v2_models, num_upgrades=0, deck_upgrades=None):
+                    v1_models, v2_models, v3_models=None, v4_models=None,
+                    num_upgrades=0, deck_upgrades=None):
     if v2_models is not None:
         preds = predict_all_campfire(floor, act, hp_pct, deck, relics,
                                      db, vocab, v1_models, v2_models,
@@ -273,6 +315,13 @@ def handle_campfire(gs, floor, act, hp_pct, deck, relics, db, vocab,
                                         num_upgrades, deck_upgrades)
         preds = predict_with_models(v1_models["campfire"], X)
 
+    if v3_models:
+        preds.update(_predict_campfire_v3(floor, act, hp_pct, deck, relics,
+                                          db, vocab, v3_models, num_upgrades, deck_upgrades))
+    if v4_models:
+        preds.update(_predict_campfire_v4(floor, act, hp_pct, deck, relics,
+                                          db, vocab, v4_models, num_upgrades, deck_upgrades))
+
     hp = gs.get("current_hp", 0)
     max_hp = gs.get("max_hp", 1)
     print_header(floor, act, hp, max_hp, "篝火决策")
@@ -280,7 +329,8 @@ def handle_campfire(gs, floor, act, hp_pct, deck, relics, db, vocab,
 
 
 def handle_boss_relic(gs, act, hp_pct, deck, relics, db, vocab,
-                      v1_models, v2_models, num_upgrades=0, deck_upgrades=None):
+                      v1_models, v2_models, v3_models=None, v4_models=None,
+                      num_upgrades=0, deck_upgrades=None):
     screen = gs.get("screen_state", {})
     relic_list = screen.get("relics", [])
 
@@ -304,6 +354,13 @@ def handle_boss_relic(gs, act, hp_pct, deck, relics, db, vocab,
                                           num_upgrades, deck_upgrades)
         preds = predict_with_models(v1_models["boss_relic"], X)
 
+    if v3_models:
+        preds.update(_predict_boss_relic_v3(relic_ids, act, hp_pct, deck, relics,
+                                            db, vocab, v3_models, num_upgrades, deck_upgrades))
+    if v4_models:
+        preds.update(_predict_boss_relic_v4(relic_ids, act, hp_pct, deck, relics,
+                                            db, vocab, v4_models, num_upgrades, deck_upgrades))
+
     floor = gs.get("floor", 0)
     hp = gs.get("current_hp", 0)
     max_hp = gs.get("max_hp", 1)
@@ -312,7 +369,8 @@ def handle_boss_relic(gs, act, hp_pct, deck, relics, db, vocab,
 
 
 def handle_shop(gs, floor, act, hp_pct, deck, relics, db, vocab,
-                v1_models, v2_models, num_upgrades=0, deck_upgrades=None):
+                v1_models, v2_models, v3_models=None, v4_models=None,
+                num_upgrades=0, deck_upgrades=None):
     screen = gs.get("screen_state", {})
 
     # 提取物品和价格
@@ -359,6 +417,16 @@ def handle_shop(gs, floor, act, hp_pct, deck, relics, db, vocab,
                                     num_upgrades, deck_upgrades)
         preds = predict_with_models(v1_models["shop"], X)
 
+    id_labels = item_ids + ["移除卡牌", "不购买"]
+    if v3_models:
+        preds.update(_predict_shop_v3(id_labels, floor, act, hp_pct, gold,
+                                      deck, relics, item_ids,
+                                      db, vocab, v3_models, num_upgrades, deck_upgrades))
+    if v4_models:
+        preds.update(_predict_shop_v4(id_labels, floor, act, hp_pct, gold,
+                                      deck, relics, item_ids,
+                                      db, vocab, v4_models, num_upgrades, deck_upgrades))
+
     hp = gs.get("current_hp", 0)
     max_hp = gs.get("max_hp", 1)
     print_header(floor, act, hp, max_hp, f"商店 (金币: {gold})")
@@ -379,11 +447,13 @@ def main():
     vocab = None
     v1_models = None
     v2_models = None
+    v3_models = None
+    v4_models = None
     models_loaded = False
     last_advice_key = None
 
     def ensure_models():
-        nonlocal db, vocab, v1_models, v2_models, models_loaded
+        nonlocal db, vocab, v1_models, v2_models, v3_models, v4_models, models_loaded
         if models_loaded:
             return
         log("正在加载 ML 模型...")
@@ -410,6 +480,34 @@ def main():
                 v2_models = None
         else:
             v2_models = None
+
+        if _v3_available:
+            try:
+                v3_models = load_v3_models()
+                if v3_models:
+                    log(f"V3 模型加载完毕: {list(v3_models.keys())}")
+                else:
+                    log("V3 模型文件不存在，跳过。")
+                    v3_models = None
+            except Exception:
+                log(f"V3 模型加载失败:\n{traceback.format_exc()}")
+                v3_models = None
+        else:
+            v3_models = None
+
+        if _v4_available:
+            try:
+                v4_models = load_v4_models()
+                if v4_models:
+                    log(f"V4 模型加载完毕: {list(v4_models.keys())}")
+                else:
+                    log("V4 模型文件不存在，跳过。")
+                    v4_models = None
+            except Exception:
+                log(f"V4 模型加载失败:\n{traceback.format_exc()}")
+                v4_models = None
+        else:
+            v4_models = None
 
         models_loaded = True
         log("模型加载完毕。")
@@ -469,22 +567,22 @@ def main():
         handled = False
         if screen == "CARD_REWARD":
             handle_card_reward(gs, floor, act, hp_pct, deck, relics,
-                               db, vocab, v1_models, v2_models,
+                               db, vocab, v1_models, v2_models, v3_models, v4_models,
                                num_upgrades, deck_upgrades)
             handled = True
         elif screen == "REST":
             handle_campfire(gs, floor, act, hp_pct, deck, relics,
-                            db, vocab, v1_models, v2_models,
+                            db, vocab, v1_models, v2_models, v3_models, v4_models,
                             num_upgrades, deck_upgrades)
             handled = True
         elif screen == "BOSS_REWARD":
             handle_boss_relic(gs, act, hp_pct, deck, relics,
-                              db, vocab, v1_models, v2_models,
+                              db, vocab, v1_models, v2_models, v3_models, v4_models,
                               num_upgrades, deck_upgrades)
             handled = True
         elif screen == "SHOP_SCREEN":
             handle_shop(gs, floor, act, hp_pct, deck, relics,
-                        db, vocab, v1_models, v2_models,
+                        db, vocab, v1_models, v2_models, v3_models, v4_models,
                         num_upgrades, deck_upgrades)
             handled = True
 
