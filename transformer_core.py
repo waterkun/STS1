@@ -304,7 +304,8 @@ def train_transformer(decisions_X, decisions_y,
             scores = model(x_pad, key_padding_mask=mask)  # (B, max_N)
 
             # Pairwise Margin Loss: 对 label[i] > label[j] 的对，
-            # 计算 softplus(score_j - score_i)
+            # 计算 softplus(score_j - score_i)，按 label 差值加权
+            # 标签 2/1/0: (2,0) 权重=2, (2,1)/(1,0) 权重=1
             # 向量化实现（广播），O(n^2) 但 n 通常只有 3-5
             valid = ~mask  # (B, max_N), True = 有效位置
             # 构造 pairwise 差异
@@ -315,15 +316,18 @@ def train_transformer(decisions_X, decisions_y,
             # 有效对: 两个位置都非 padding 且 label_i > label_j
             valid_mask = valid.unsqueeze(2) & valid.unsqueeze(1)  # (B, N, N)
             pair_mask = (y_i > y_j) & valid_mask  # (B, N, N)
+            # label 差值作为对的权重：差值越大信号越确定，惩罚越强
+            label_diff = (y_i - y_j).clamp(min=0)  # (B, N, N)
             # softplus(score_j - score_i) 对应 label_i > label_j 的对
-            pair_loss = F.softplus(s_j - s_i)  # (B, N, N)
+            pair_loss = F.softplus(s_j - s_i) * label_diff  # (B, N, N)
             pair_loss = pair_loss * pair_mask.float()
             # 按决策权重缩放 pairwise loss
             if decisions_w is not None:
                 # bW: (B,) → (B, 1, 1) 广播到 (B, N, N)
                 pair_loss = pair_loss * bW.unsqueeze(1).unsqueeze(2)
-            n_pairs = pair_mask.float().sum()
-            loss = pair_loss.sum() / n_pairs.clamp(min=1.0)
+            # 归一化：除以加权对数之和而非对数，保持 loss scale 稳定
+            weight_sum = (label_diff * pair_mask.float()).sum()
+            loss = pair_loss.sum() / weight_sum.clamp(min=1.0)
 
             optimizer.zero_grad()
             loss.backward()

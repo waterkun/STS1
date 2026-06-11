@@ -2,8 +2,11 @@
 """
 Ironclad ML Advisor V3 - Transformer 排序模型
 
-基于纯 NumPy 实现的 Transformer 编码器，通过自注意力让候选选项
+基于 PyTorch 实现的 Transformer 编码器，通过自注意力让候选选项
 互相感知，捕捉选项间的相对价值和协同关系。
+
+损失函数: Pairwise Margin Loss (softplus)，按 ascension_level × victory 加权。
+LR 调度: 5 epoch warmup + cosine decay。
 
 与 V1/V2 的区别:
   - V1/V2: 每个选项独立打分（无法感知"这次还有 Barricade 可选"）

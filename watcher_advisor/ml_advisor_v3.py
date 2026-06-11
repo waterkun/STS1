@@ -2,6 +2,16 @@
 """
 Watcher ML Advisor V3 - Transformer 排序模型
 
+基于 PyTorch 实现的 Transformer 编码器，通过自注意力让候选选项
+互相感知，捕捉选项间的相对价值和协同关系。
+
+损失函数: Pairwise Margin Loss (softplus)，按 ascension_level × victory 加权。
+LR 调度: 5 epoch warmup + cosine decay。
+
+与 V1/V2 的区别:
+  - V1/V2: 每个选项独立打分（无法感知"这次还有 Deva Form 可选"）
+  - V3:    同一决策内各选项互相注意，打分受整个候选集影响
+
 Usage:
   python -m watcher_advisor.ml_advisor_v3 train
   python -m watcher_advisor.ml_advisor_v3 card \
@@ -282,18 +292,21 @@ def main():
             options.append("SKIP")
         preds = predict_all_card(options, args.floor, args.act, hp_pct,
                                  deck, relics, db, vocab, v3_models)
-        print(f"\n=== 观者 V3 Transformer (卡牌选择) ===")
+        print(f"\n=== 观者 V3 Transformer 决策建议 (卡牌选择) ===")
+        print(f"Floor {args.floor} Act {args.act} | HP: {args.hp}/{args.max_hp} ({hp_pct}%)")
         _print_predictions(options, preds)
     elif args.command == "campfire":
         preds = predict_all_campfire(args.floor, args.act, hp_pct,
                                      deck, relics, db, vocab, v3_models)
-        print(f"\n=== 观者 V3 Transformer (篝火决策) ===")
+        print(f"\n=== 观者 V3 Transformer 决策建议 (篝火决策) ===")
+        print(f"Floor {args.floor} Act {args.act} | HP: {args.hp}/{args.max_hp} ({hp_pct}%)")
         _print_predictions(["REST", "SMITH"], preds)
     elif args.command == "boss-relic":
         options = parse_list(args.options)
         preds = predict_all_boss_relic(options, args.act, hp_pct,
                                        deck, relics, db, vocab, v3_models)
-        print(f"\n=== 观者 V3 Transformer (Boss 遗物) ===")
+        print(f"\n=== 观者 V3 Transformer 决策建议 (Boss 遗物选择) ===")
+        print(f"Act {args.act} | HP: {args.hp}/{args.max_hp} ({hp_pct}%)")
         _print_predictions(options, preds)
     elif args.command == "shop":
         all_items = parse_list(args.cards) + parse_list(args.shop_relics) + parse_list(args.potions)
@@ -301,7 +314,8 @@ def main():
         preds = predict_all_shop(option_labels, args.floor, args.act, hp_pct,
                                  args.gold, deck, relics, all_items,
                                  db, vocab, v3_models)
-        print(f"\n=== 观者 V3 Transformer (商店) ===")
+        print(f"\n=== 观者 V3 Transformer 决策建议 (商店) ===")
+        print(f"Floor {args.floor} Act {args.act} | HP: {args.hp}/{args.max_hp} ({hp_pct}%) | Gold: {args.gold}")
         _print_predictions(option_labels, preds)
 
 
