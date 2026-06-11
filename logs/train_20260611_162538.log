@@ -1,0 +1,300 @@
+
+==================================================================
+  杀戮尖塔 AI 训练控制器  2026-06-11 16:25:38
+==================================================================
+  角色: ironclad
+  步骤: db, v1, v2, v3, v4
+  日志: F:\AI_Learn\slay_of_spire\STS1\logs\train_20260611_162538.log
+
+------------------------------------------------------------------
+  步骤: DB
+------------------------------------------------------------------
+
+  [2026-06-11 16:25:38] 开始 ironclad DB
+  命令: python -m ironclad_advisor.build_db
+
+    Loading Ironclad runs...
+    Loaded 14586 runs (3484 wins, 11102 losses)
+    
+    Building card decision database...
+      250260 decision points, 345 unique cards
+    Building boss relic database...
+      16185 boss relic decisions
+    Building campfire database...
+      80759 campfire decisions
+    Building shop database...
+      706 shop visits
+    
+    Done. Database written to F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\db/
+
+  [2026-06-11 16:25:52] ironclad DB 完成 ✓
+
+------------------------------------------------------------------
+  步骤: V1
+------------------------------------------------------------------
+
+  [2026-06-11 16:25:52] 开始 ironclad V1
+  命令: python -m ironclad_advisor.ml_advisor train
+
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    �������ݿ�...
+    �����ʱ�...
+      ���ƴʱ�: 412 ��
+      ����ʱ�: 137 ��
+    �ʱ��ѱ��浽 F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\vocab.pkl
+    
+    === ѵ�����ƾ���ģ�� ===
+      ������: 250260, ������: 102012, ������: 148248
+      xgboost: AUC=0.7616, Accuracy=0.7262
+      Top 10 ����:
+        act_1: 0.0941
+        act_2: 0.0705
+        num_relics: 0.0703
+        floor: 0.0269
+        deck_size: 0.0186
+        hp_pct: 0.0124
+        deck_Corruption: 0.0107
+        deck_Feel No Pain: 0.0090
+        deck_Shockwave: 0.0083
+        deck_Feed: 0.0077
+      lightgbm: AUC=0.7610, Accuracy=0.7251
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\card_xgboost.pkl
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\card_lightgbm.pkl
+    
+    === ѵ���������ģ�� ===
+      ������: 80759, ������: 32527, ������: 48232
+      xgboost: AUC=0.7750, Accuracy=0.7318
+      Top 10 ����:
+        num_relics: 0.0689
+        act_2: 0.0330
+        hp_above_70: 0.0265
+        floor: 0.0218
+        hp_pct: 0.0169
+        deck_Corruption: 0.0117
+        hp_below_30: 0.0112
+        deck_Feed: 0.0088
+        relic_Dead Branch: 0.0083
+        deck_Shockwave: 0.0083
+      lightgbm: AUC=0.7747, Accuracy=0.7327
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\campfire_xgboost.pkl
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\campfire_lightgbm.pkl
+    
+    === ѵ�� Boss �������ģ�� ===
+      ������: 16121, ������: 6957, ������: 9164
+      xgboost: AUC=0.7418, Accuracy=0.6867
+      Top 10 ����:
+        act_2: 0.0848
+        relic_win_rate: 0.0273
+        num_relics: 0.0131
+        deck_Corruption: 0.0120
+        relic_Dead Branch: 0.0096
+        upgrade_Dark Embrace: 0.0083
+        deck_Feed: 0.0083
+        relic_Toxic Egg 2: 0.0083
+        upgrade_Fiend Fire: 0.0080
+        upgrade_Corruption: 0.0075
+      lightgbm: AUC=0.7389, Accuracy=0.6833
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\boss_relic_xgboost.pkl
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\boss_relic_lightgbm.pkl
+    
+    === ѵ���̵����ģ�� ===
+      ������: 8139, ������: 5503, ������: 2636
+      xgboost: AUC=0.9984, Accuracy=0.9779
+      Top 10 ����:
+        deck_Offering: 0.0251
+        relic_Strawberry: 0.0167
+        deck_Berserk: 0.0166
+        upgrade_Fiend Fire: 0.0159
+        relic_White Beast Statue: 0.0152
+        upgrade_Hemokinesis: 0.0140
+        relic_Busted Crown: 0.0134
+        deck_Iron Wave: 0.0126
+        relic_StrikeDummy: 0.0122
+        upgrade_Immolate: 0.0115
+      lightgbm: AUC=0.9986, Accuracy=0.9792
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\shop_xgboost.pkl
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\shop_lightgbm.pkl
+    
+    ѵ����ɣ�ģ���ѱ��浽 F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models
+
+  [2026-06-11 16:27:18] ironclad V1 完成 ✓
+
+------------------------------------------------------------------
+  步骤: V2
+------------------------------------------------------------------
+
+  [2026-06-11 16:27:18] 开始 ironclad V2
+  命令: python -m ironclad_advisor.ml_advisor_v2 train
+
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    �������ݿ�...
+    �����ʱ�...
+      ���ƴʱ�: 412 ��
+      ����ʱ�: 137 ��
+    
+    === ѵ������ V2 ģ�� ===
+      ������������...
+      ��������: 1014931 ��, 250260 ��, Ȩ�ط�Χ: [0.18, 1.20]
+      LambdaMART card: ƽ�� NDCG=0.8186
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\card_lambdamart.pkl
+      ����ѡ������...
+      ѡ������: 1014931 ��, ������: 250260
+      LogReg card: ѵ���� Accuracy=0.7809
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\card_logreg.pkl
+      ���� CWR ͳ��...
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\card_cwr.pkl
+    
+    === ѵ�� Boss ���� V2 ģ�� ===
+      ��������: 48363 ��, 16121 ��, Ȩ�ط�Χ: [0.18, 1.20]
+      LambdaMART boss_relic: ƽ�� NDCG=0.8428
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\boss_relic_lambdamart.pkl
+      ѡ������: 48363 ��, ������: 16121
+      LogReg boss_relic: ѵ���� Accuracy=0.7156
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\boss_relic_logreg.pkl
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\boss_relic_cwr.pkl
+    
+    === ѵ������ V2 ģ�� ===
+      ��������: 161518 ��, 80759 ��, Ȩ�ط�Χ: [0.18, 1.20]
+      LambdaMART campfire: ƽ�� NDCG=0.9134
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\campfire_lambdamart.pkl
+      ѡ������: 161518 ��, ������: 73247
+      LogReg campfire: ѵ���� Accuracy=0.7503
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\campfire_logreg.pkl
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\campfire_cwr.pkl
+    
+    === ѵ���̵� V2 ģ�� ===
+      ��������: 9551 ��, 706 ��, Ȩ�ط�Χ: [0.60, 1.20]
+      LambdaMART shop: ƽ�� NDCG=0.9759
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\shop_lambdamart.pkl
+      ѡ������: 9551 ��, ������: 371
+      LogReg shop: ѵ���� Accuracy=0.9975
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\shop_logreg.pkl
+      �ѱ���: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\shop_cwr.pkl
+    
+    === ��Ϊ�������� ===
+    
+      [����] ȫ�� (n=250260):
+        Top-1 Accuracy: 0.5873
+        Top-3 Accuracy: 0.9411
+        MRR:            0.7594
+      [����] A20 �Ӽ� (n=197125):
+        Top-1 Accuracy: 0.6122
+        Top-3 Accuracy: 0.9518
+        MRR:            0.7761
+    
+      [Boss����] ȫ�� (n=16121):
+        Top-1 Accuracy: 0.6222
+        Top-3 Accuracy: 1.0000
+        MRR:            0.7914
+      [Boss����] A20 �Ӽ� (n=12649):
+        Top-1 Accuracy: 0.6572
+        Top-3 Accuracy: 1.0000
+        MRR:            0.8124
+    
+      [����] ȫ�� (n=73247):
+        Top-1 Accuracy: 0.7655
+        Top-3 Accuracy: 1.0000
+        MRR:            0.8827
+      [����] A20 �Ӽ� (n=57386):
+        Top-1 Accuracy: 0.7765
+        Top-3 Accuracy: 1.0000
+        MRR:            0.8882
+    
+      [�̵�] ȫ�� (n=366):
+        Top-1 Accuracy: 0.9208
+        Top-3 Accuracy: 0.9344
+        MRR:            0.9440
+      [�̵�] A20 �Ӽ� (n=366):
+        Top-1 Accuracy: 0.9208
+        Top-3 Accuracy: 0.9344
+        MRR:            0.9440
+    
+    V2 ѵ����ɣ�
+
+  [2026-06-11 16:35:12] ironclad V2 完成 ✓
+
+------------------------------------------------------------------
+  步骤: V3
+------------------------------------------------------------------
+
+  [2026-06-11 16:35:12] 开始 ironclad V3
+  命令: python -m ironclad_advisor.ml_advisor_v3 train
+
