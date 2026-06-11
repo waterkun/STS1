@@ -1402,7 +1402,13 @@ def predict_all_shop(option_labels: list[str], floor: int, act: int, hp_pct: int
     X_v1 = shop_inference_features_v1(floor, act, hp_pct, gold, deck, relics,
                                       items, stats, vocab,
                                       num_upgrades, deck_upgrades)
-    preds.update(_safe_predict_v1(v1_models.get("shop", {}), X_v1))
+    v1_preds = _safe_predict_v1(v1_models.get("shop", {}), X_v1)
+    # V1 特征只有 items+"不购买"(N+1)，V2 多了"移除卡牌"(N+2)
+    # 在倒数第1位(不购买之前)插入最低分，对齐长度
+    for k, v in v1_preds.items():
+        if len(v) == len(items) + 1:
+            v1_preds[k] = np.insert(v, len(items), v.min())
+    preds.update(v1_preds)
 
     X_v2 = shop_inference_features_v2(floor, act, hp_pct, gold, deck, relics,
                                       items, stats, vocab,
