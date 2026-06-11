@@ -296,8 +296,7 @@ watcher_advisor/models/
 # Training run logs (TensorBoard, etc.)
 runs/
 
-# train_all.py 生成的训练日志
-logs/
+# Local advisor runtime logs (not shared)
 advisor.log
 watcher_advisor.log
 
