@@ -250,14 +250,14 @@ def train_transformer(decisions_X, decisions_y,
     返回: 训练好的 STSTransformerRanker (在 CPU 上)
     """
     if not decisions_X:
-        print(f"  {name}: 无训练数据，跳过")
+        print(f"  {name}: 无训练数据，跳过", flush=True)
         return None
 
     # 过滤掉只有一个选项的决策
     if decisions_w is not None:
         triples = [(x, y, w) for x, y, w in zip(decisions_X, decisions_y, decisions_w) if len(x) >= 2]
         if not triples:
-            print(f"  {name}: 所有决策只有一个选项，跳过")
+            print(f"  {name}: 所有决策只有一个选项，跳过", flush=True)
             return None
         decisions_X, decisions_y, decisions_w = zip(*triples)
         decisions_X = list(decisions_X)
@@ -266,7 +266,7 @@ def train_transformer(decisions_X, decisions_y,
     else:
         pairs = [(x, y) for x, y in zip(decisions_X, decisions_y) if len(x) >= 2]
         if not pairs:
-            print(f"  {name}: 所有决策只有一个选项，跳过")
+            print(f"  {name}: 所有决策只有一个选项，跳过", flush=True)
             return None
         decisions_X, decisions_y = zip(*pairs)
         decisions_X = list(decisions_X)
@@ -298,10 +298,10 @@ def train_transformer(decisions_X, decisions_y,
     # 设备选择
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        print(f"  使用设备: {torch.cuda.get_device_name(0)} (CUDA)")
+        print(f"  使用设备: {torch.cuda.get_device_name(0)} (CUDA)", flush=True)
     else:
         device = torch.device("cpu")
-        print(f"  使用设备: CPU")
+        print(f"  使用设备: CPU", flush=True)
 
     val_info = f", 验证集={len(val_X)}" if val_X is not None else ""
     if decisions_w is not None:
@@ -400,11 +400,11 @@ def train_transformer(decisions_X, decisions_y,
             current_lr = scheduler.get_last_lr()[0]
             if val_X is not None:
                 val_ndcg = _compute_val_ndcg(model, val_X, val_y, device)
-                print(f"    Epoch {epoch+1:>2d}/{n_epochs}  loss={avg:.4f}  val_ndcg={val_ndcg:.4f}  lr={current_lr:.6f}")
+                print(f"    Epoch {epoch+1:>2d}/{n_epochs}  loss={avg:.4f}  val_ndcg={val_ndcg:.4f}  lr={current_lr:.6f}", flush=True)
             else:
-                print(f"    Epoch {epoch+1:>2d}/{n_epochs}  loss={avg:.4f}  lr={current_lr:.6f}")
+                print(f"    Epoch {epoch+1:>2d}/{n_epochs}  loss={avg:.4f}  lr={current_lr:.6f}", flush=True)
 
-    print(f"  Transformer {name} 训练完成")
+    print(f"  Transformer {name} 训练完成", flush=True)
 
     # 训练完成后移回 CPU 以便序列化和跨设备推理
     model.cpu()

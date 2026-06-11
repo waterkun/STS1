@@ -122,43 +122,51 @@ def run_training_v3():
     with open(vocab_path, "wb") as f:
         pickle.dump(vocab, f)
 
+    import datetime
+    def _ts():
+        return datetime.datetime.now().strftime("%H:%M:%S")
+
     # --- 卡牌 ---
-    print("\n=== 训练卡牌 V3 Transformer ===")
+    print(f"\n=== 训练卡牌 V3 Transformer ===", flush=True)
+    print(f"  [{_ts()}] 构建卡牌排序数据...", flush=True)
     X, y, groups, dw = build_card_ranking_data(db, vocab)
-    print(f"  排序数据: {len(y)} 行, {len(groups)} 组")
+    print(f"  [{_ts()}] 排序数据: {len(y)} 行, {len(groups)} 组", flush=True)
     dX, dy, dWeights = decisions_from_ranking_data(X, y, groups, dw)
     model = train_transformer(dX, dy, name="card", decisions_w=dWeights)
     if model:
         save_v3_model(model, "card_transformer_v3")
 
     # --- Boss 遗物 ---
-    print("\n=== 训练 Boss 遗物 V3 Transformer ===")
+    print(f"\n=== 训练 Boss 遗物 V3 Transformer ===", flush=True)
+    print(f"  [{_ts()}] 构建 Boss 遗物排序数据...", flush=True)
     X, y, groups, dw = build_boss_relic_ranking_data(db, vocab)
-    print(f"  排序数据: {len(y)} 行, {len(groups)} 组")
+    print(f"  [{_ts()}] 排序数据: {len(y)} 行, {len(groups)} 组", flush=True)
     dX, dy, dWeights = decisions_from_ranking_data(X, y, groups, dw)
     model = train_transformer(dX, dy, name="boss_relic", decisions_w=dWeights)
     if model:
         save_v3_model(model, "boss_relic_transformer_v3")
 
     # --- 篝火 ---
-    print("\n=== 训练篝火 V3 Transformer ===")
+    print(f"\n=== 训练篝火 V3 Transformer ===", flush=True)
+    print(f"  [{_ts()}] 构建篝火排序数据...", flush=True)
     X, y, groups, dw = build_campfire_ranking_data(db, vocab)
-    print(f"  排序数据: {len(y)} 行, {len(groups)} 组")
+    print(f"  [{_ts()}] 排序数据: {len(y)} 行, {len(groups)} 组", flush=True)
     dX, dy, dWeights = decisions_from_ranking_data(X, y, groups, dw)
     model = train_transformer(dX, dy, name="campfire", decisions_w=dWeights)
     if model:
         save_v3_model(model, "campfire_transformer_v3")
 
     # --- 商店 ---
-    print("\n=== 训练商店 V3 Transformer ===")
+    print(f"\n=== 训练商店 V3 Transformer ===", flush=True)
+    print(f"  [{_ts()}] 构建商店排序数据...", flush=True)
     X, y, groups, dw = build_shop_ranking_data(db, vocab)
-    print(f"  排序数据: {len(y)} 行, {len(groups)} 组")
+    print(f"  [{_ts()}] 排序数据: {len(y)} 行, {len(groups)} 组", flush=True)
     dX, dy, dWeights = decisions_from_ranking_data(X, y, groups, dw)
     model = train_transformer(dX, dy, name="shop", decisions_w=dWeights)
     if model:
         save_v3_model(model, "shop_transformer_v3")
 
-    print("\nV3 训练完成！")
+    print("\nV3 训练完成！", flush=True)
 
 
 # ============================================================

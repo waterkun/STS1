@@ -103,8 +103,15 @@ def run_step(tee: Tee, char: str, step: str) -> bool:
         tee.write(f"  [{timestamp()}] 跳过 {char} {step.upper()}（未实现）\n")
         return True
 
+    # 强制子进程无缓冲输出，确保日志实时可见（在管道模式下 Python 默认块缓冲）
+    if cmd[0] == "python":
+        cmd = [cmd[0], "-u"] + cmd[1:]
+
     tee.write(f"\n  [{timestamp()}] 开始 {char} {step.upper()}\n")
     tee.write(f"  命令: {' '.join(cmd)}\n\n")
+
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
 
     proc = subprocess.Popen(
         cmd,
@@ -114,6 +121,7 @@ def run_step(tee: Tee, char: str, step: str) -> bool:
         encoding="utf-8",
         errors="replace",
         bufsize=1,
+        env=env,
     )
 
     for line in proc.stdout:
