@@ -94,6 +94,7 @@ V2 在 V1 基础上新增特征（观者为例）：
 - LR 调度：前 5 epoch 线性 warmup（0.2→1.0），之后 cosine decay 至 1%（共 60 epoch）
 - 梯度裁剪：`clip_grad_norm_(max_norm=1.0)`
 - 训练用 CUDA（若可用），推理时模型移回 CPU 序列化
+- **验证集评估**：训练时自动按决策随机抽取 20% 作为 hold-out 验证集（seed=42），每 5 epoch 计算一次 validation NDCG，实时监控过拟合；数据不足 10 条时跳过验证
 
 **后处理**：对卡组中已有的能力牌（Power）候选项施加 ×0.5 重复惩罚，避免推荐无意义的重复能力牌。
 
@@ -109,7 +110,7 @@ V2 在 V1 基础上新增特征（观者为例）：
 | 架构 | 同 `transformer_core.py` | 同 V3（共用相同代码） |
 | 模型文件 | `*_transformer_v3.pt` | `*_transformer_v4.pt` |
 
-V4 数据量远少于 V3（仅 A20 胜局），但信噪比更高，代表了「顶级玩家在最高难度下的真实选择」。
+V4 数据量远少于 V3（仅 A20 胜局），但信噪比更高，代表了「顶级玩家在最高难度下的真实选择」。V4 同样使用 20% hold-out 验证集评估（无决策加权，因为数据本身已是最高质量）。
 
 ### 已训练模型状态
 
@@ -332,7 +333,7 @@ STS1/
 - **PyTorch** — V3/V4 Transformer 模型（Pre-Norm 编码器、Pairwise Margin Loss、Adam + Warmup + Cosine Decay）
 - **XGBoost** — V1 梯度提升分类器（GPU 加速）
 - **LightGBM** — V1 分类 + V2 LambdaMART 排序（GPU 加速）
-- **scikit-learn** — Logistic Regression、交叉验证、评估指标（AUC、NDCG）
+- **scikit-learn** — Logistic Regression、交叉验证、评估指标（AUC、NDCG），V3/V4 训练时 hold-out 验证集 NDCG 计算
 - **NumPy** — 特征编码与矩阵运算
 - **Poetry** — 依赖管理
 
@@ -347,6 +348,7 @@ STS1/
 - [x] V3 PyTorch Transformer（自注意力，候选选项互相感知，Pairwise Margin Loss + label-diff 加权）
 - [x] V4 A20 胜局专用 Transformer（仅学习顶级胜局策略，永不从失败中学习）
 - [x] V3/V4 集成至 communicate.py（全部四角色，Borda Count 投票）
+- [x] V3/V4 训练时 hold-out 验证集 NDCG 评估（每 5 epoch 报告，监控过拟合）
 - [ ] 观者 / 机器人 V3 + V4 Transformer 训练
 - [ ] 静默猎手 / 机器人 V1 模型训练
 
