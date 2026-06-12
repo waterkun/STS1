@@ -22,3 +22,14 @@
 2026-06-11 21:04:00,934 [LOAD] 正在加载 THE_SILENT advisor (silent_advisor)...
 2026-06-11 21:04:01,760 [LOAD] silent_advisor.ml_advisor 导入成功
 2026-06-11 21:04:01,808 [LOAD] silent_advisor.ml_advisor_v2 导入成功
+2026-06-11 21:15:18,759 [BOOT] unified script started, python=E:\anaconda3\envs\slay_spire\python.exe
+2026-06-11 21:15:18,759 [BOOT] argv=['F:\\AI_Learn\\slay_of_spire\\STS1\\communicate.py']
+2026-06-11 21:15:18,759 [BOOT] cwd=F:\SteamLibrary\steamapps\common\SlayTheSpire
+2026-06-11 21:15:18,759 [SEND] ready
+2026-06-11 21:17:43,161 [MAIN] 检测到角色: THE_SILENT
+2026-06-11 21:17:43,161 [LOAD] 正在加载 THE_SILENT advisor (silent_advisor)...
+2026-06-11 21:17:43,992 [LOAD] silent_advisor.ml_advisor 导入成功
+2026-06-11 21:17:44,055 [LOAD] silent_advisor.ml_advisor_v2 导入成功
+2026-06-11 21:17:44,055 [LOAD] 加载 THE_SILENT DB...
+2026-06-11 21:17:47,163 [LOAD] THE_SILENT DB 加载完毕
+2026-06-11 21:17:47,163 [LOAD] THE_SILENT vocab 加载完毕
