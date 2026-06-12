@@ -1,0 +1,339 @@
+
+==================================================================
+  杀戮尖塔 AI 训练控制器  2026-06-11 20:37:21
+==================================================================
+  角色: silent
+  步骤: db, v1, v2, v3, v4
+  日志: F:\AI_Learn\slay_of_spire\STS1\logs\train_20260611_203721.log
+
+------------------------------------------------------------------
+  步骤: DB
+------------------------------------------------------------------
+
+  [2026-06-11 20:37:21] 开始 silent DB
+  命令: python -u -m silent_advisor.build_db
+
+    Loading Silent runs...
+    Loaded 12328 runs (2895 wins, 9433 losses)
+    
+    Building card decision database...
+      200171 decision points, 346 unique cards
+    Building boss relic database...
+      12870 boss relic decisions
+    Building campfire database...
+      66884 campfire decisions
+    Building shop database...
+      602 shop visits
+    
+    Done. Database written to F:\AI_Learn\slay_of_spire\STS1\silent_advisor\db/
+
+  [2026-06-11 20:37:35] silent DB 完成 ✓
+
+------------------------------------------------------------------
+  步骤: V1
+------------------------------------------------------------------
+  [2026-06-11 20:37:35] 跳过 silent V1（未实现）
+
+------------------------------------------------------------------
+  步骤: V2
+------------------------------------------------------------------
+
+  [2026-06-11 20:37:35] 开始 silent V2
+  命令: python -u -m silent_advisor.ml_advisor_v2 train
+
+    加载数据库...
+    构建词表...
+      卡牌词表: 399 张
+      遗物词表: 137 个
+    
+    === 训练卡牌 V2 模型 ===
+      构造排序数据...
+      排序数据: 812129 行, 200171 组, 权重范围: [0.18, 1.20]
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+      LambdaMART card: 平均 NDCG=0.8049
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\card_lambdamart.pkl
+      构造选择数据...
+      选择数据: 812129 行, 正样本: 200171
+      LogReg card: 训练集 Accuracy=0.7741
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\card_logreg.pkl
+      计算 CWR 统计...
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\card_cwr.pkl
+    
+    === 训练 Boss 遗物 V2 模型 ===
+      排序数据: 38544 行, 12848 组, 权重范围: [0.18, 1.20]
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+      LambdaMART boss_relic: 平均 NDCG=0.8443
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\boss_relic_lambdamart.pkl
+      选择数据: 38544 行, 正样本: 12848
+      LogReg boss_relic: 训练集 Accuracy=0.7126
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\boss_relic_logreg.pkl
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\boss_relic_cwr.pkl
+    
+    === 训练篝火 V2 模型 ===
+      排序数据: 133768 行, 66884 组, 权重范围: [0.18, 1.20]
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+      LambdaMART campfire: 平均 NDCG=0.9069
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\campfire_lambdamart.pkl
+      选择数据: 133768 行, 正样本: 60887
+      LogReg campfire: 训练集 Accuracy=0.7326
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\campfire_logreg.pkl
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\campfire_cwr.pkl
+    
+    === 训练商店 V2 模型 ===
+      排序数据: 8045 行, 602 组, 权重范围: [0.60, 1.20]
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+      LambdaMART shop: 平均 NDCG=0.9762
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\shop_lambdamart.pkl
+      选择数据: 8045 行, 正样本: 306
+      LogReg shop: 训练集 Accuracy=0.9976
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\shop_logreg.pkl
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\shop_cwr.pkl
+    
+    === 行为对齐评估 ===
+    
+      [卡牌] 全量 (n=200171):
+        Top-1 Accuracy: 0.5533
+        Top-3 Accuracy: 0.9309
+        MRR:            0.7375
+      [卡牌] A20 子集 (n=160140):
+        Top-1 Accuracy: 0.5677
+        Top-3 Accuracy: 0.9371
+        MRR:            0.7474
+    
+      [Boss遗物] 全量 (n=12848):
+        Top-1 Accuracy: 0.6224
+        Top-3 Accuracy: 1.0000
+        MRR:            0.7922
+      [Boss遗物] A20 子集 (n=10173):
+        Top-1 Accuracy: 0.6478
+        Top-3 Accuracy: 1.0000
+        MRR:            0.8065
+    
+      [篝火] 全量 (n=60887):
+        Top-1 Accuracy: 0.7476
+        Top-3 Accuracy: 1.0000
+        MRR:            0.8738
+      [篝火] A20 子集 (n=48435):
+        Top-1 Accuracy: 0.7677
+        Top-3 Accuracy: 1.0000
+        MRR:            0.8838
+    
+      [商店] 全量 (n=303):
+        Top-1 Accuracy: 0.9274
+        Top-3 Accuracy: 0.9373
+        MRR:            0.9479
+      [商店] A20 子集 (n=303):
+        Top-1 Accuracy: 0.9274
+        Top-3 Accuracy: 0.9373
+        MRR:            0.9479
+    
+    V2 训练完成！
+
+  [2026-06-11 20:44:04] silent V2 完成 ✓
+
+------------------------------------------------------------------
+  步骤: V3
+------------------------------------------------------------------
+
+  [2026-06-11 20:44:04] 开始 silent V3
+  命令: python -u -m silent_advisor.ml_advisor_v3 train
+
+    加载数据库...
+    构建词表...
+      卡牌词表: 399 张
+      遗物词表: 137 个
+    
+    === 训练卡牌 V3 Transformer ===
+      [20:44:09] 构建卡牌排序数据...
+      [20:44:51] 排序数据: 812129 行, 200171 组
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer card: 训练=160137, 验证集=40034 个决策, 特征维度=1414, d_model=256, n_heads=8, n_layers=3, 权重范围: [0.18, 1.20]
+        Epoch  1/60  loss=0.5185  val_ndcg=0.8035 ★  lr=0.000180
+        Epoch  5/60  loss=0.3477  val_ndcg=0.8416 ★  lr=0.000500
+        Epoch 10/60  loss=0.3196  val_ndcg=0.8476 ★  lr=0.000490
+        Epoch 15/60  loss=0.3068  val_ndcg=0.8539 ★  lr=0.000461
+        Epoch 20/60  loss=0.2982  val_ndcg=0.8512  lr=0.000415
+        Epoch 25/60  loss=0.2887  val_ndcg=0.8479  lr=0.000355
+        Epoch 30/60  loss=0.2785  val_ndcg=0.8446  lr=0.000288
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.8539)
+      Transformer card 训练完成，已恢复最佳模型 (val_ndcg=0.8539)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\card_transformer_v3.pt
+    
+    === 训练 Boss 遗物 V3 Transformer ===
+      [20:53:38] 构建 Boss 遗物排序数据...
+      [20:53:40] 排序数据: 38544 行, 12848 组
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer boss_relic: 训练=10279, 验证集=2569 个决策, 特征维度=1121, d_model=256, n_heads=8, n_layers=3, 权重范围: [0.18, 1.20]
+        Epoch  1/60  loss=0.6228  val_ndcg=0.8417 ★  lr=0.000180
+        Epoch  5/60  loss=0.4691  val_ndcg=0.8499 ★  lr=0.000500
+        Epoch 10/60  loss=0.4361  val_ndcg=0.8513 ★  lr=0.000490
+        Epoch 15/60  loss=0.4213  val_ndcg=0.8507  lr=0.000461
+        Epoch 20/60  loss=0.4058  val_ndcg=0.8500  lr=0.000415
+        Epoch 25/60  loss=0.3935  val_ndcg=0.8541 ★  lr=0.000355
+        Epoch 30/60  loss=0.3812  val_ndcg=0.8544 ★  lr=0.000288
+        Epoch 35/60  loss=0.3638  val_ndcg=0.8530  lr=0.000217
+        Epoch 40/60  loss=0.3509  val_ndcg=0.8459  lr=0.000150
+        Epoch 45/60  loss=0.3318  val_ndcg=0.8535  lr=0.000090
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.8544)
+      Transformer boss_relic 训练完成，已恢复最佳模型 (val_ndcg=0.8544)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\boss_relic_transformer_v3.pt
+    
+    === 训练篝火 V3 Transformer ===
+      [20:54:14] 构建篝火排序数据...
+      [20:54:21] 排序数据: 133768 行, 66884 组
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer campfire: 训练=53508, 验证集=13376 个决策, 特征维度=978, d_model=256, n_heads=8, n_layers=3, 权重范围: [0.18, 1.20]
+        Epoch  1/60  loss=0.5790  val_ndcg=0.9015 ★  lr=0.000180
+        Epoch  5/60  loss=0.3133  val_ndcg=0.9465 ★  lr=0.000500
+        Epoch 10/60  loss=0.2993  val_ndcg=0.9487 ★  lr=0.000490
+        Epoch 15/60  loss=0.2897  val_ndcg=0.9439  lr=0.000461
+        Epoch 20/60  loss=0.2785  val_ndcg=0.9476  lr=0.000415
+        Epoch 25/60  loss=0.2693  val_ndcg=0.9432  lr=0.000355
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.9487)
+      Transformer campfire 训练完成，已恢复最佳模型 (val_ndcg=0.9487)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\campfire_transformer_v3.pt
+    
+    === 训练商店 V3 Transformer ===
+      [20:55:38] 构建商店排序数据...
+      [20:55:38] 排序数据: 8045 行, 602 组
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer shop: 训练=482, 验证集=120 个决策, 特征维度=1536, d_model=256, n_heads=8, n_layers=3, 权重范围: [0.60, 1.20]
+        Epoch  1/60  loss=0.1756  val_ndcg=0.9306 ★  lr=0.000180
+        Epoch  5/60  loss=0.0612  val_ndcg=0.9439 ★  lr=0.000500
+        Epoch 10/60  loss=0.0494  val_ndcg=0.9469 ★  lr=0.000490
+        Epoch 15/60  loss=0.0557  val_ndcg=0.9469  lr=0.000461
+        Epoch 20/60  loss=0.0518  val_ndcg=0.9469  lr=0.000415
+        Epoch 25/60  loss=0.0489  val_ndcg=0.9469  lr=0.000355
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.9469)
+      Transformer shop 训练完成，已恢复最佳模型 (val_ndcg=0.9469)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\shop_transformer_v3.pt
+    
+    V3 训练完成！
+
+  [2026-06-11 20:55:41] silent V3 完成 ✓
+
+------------------------------------------------------------------
+  步骤: V4
+------------------------------------------------------------------
+
+  [2026-06-11 20:55:41] 开始 silent V4
+  命令: python -u -m silent_advisor.ml_advisor_v4 train
+
+    加载数据库...
+    构建词表...
+      卡牌词表: 399 张
+      遗物词表: 137 个
+    
+    === 训练卡牌 V4 Transformer (A20 胜局) ===
+      A20 胜局决策数: 65425
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer card_v4: 训练=52340, 验证集=13085 个决策, 特征维度=1414, d_model=256, n_heads=8, n_layers=3
+        Epoch  1/60  loss=0.6664  val_ndcg=0.7921 ★  lr=0.000180
+        Epoch  5/60  loss=0.3814  val_ndcg=0.8545 ★  lr=0.000500
+        Epoch 10/60  loss=0.3507  val_ndcg=0.8562 ★  lr=0.000490
+        Epoch 15/60  loss=0.3338  val_ndcg=0.8534  lr=0.000461
+        Epoch 20/60  loss=0.3160  val_ndcg=0.8674 ★  lr=0.000415
+        Epoch 25/60  loss=0.3006  val_ndcg=0.8721 ★  lr=0.000355
+        Epoch 30/60  loss=0.2867  val_ndcg=0.8783 ★  lr=0.000288
+        Epoch 35/60  loss=0.2699  val_ndcg=0.8764  lr=0.000217
+        Epoch 40/60  loss=0.2544  val_ndcg=0.8775  lr=0.000150
+        Epoch 45/60  loss=0.2379  val_ndcg=0.8769  lr=0.000090
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.8783)
+      Transformer card_v4 训练完成，已恢复最佳模型 (val_ndcg=0.8783)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\card_transformer_v4.pt
+    
+    === 训练 Boss 遗物 V4 Transformer (A20 胜局) ===
+      A20 胜局决策数: 4476
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer boss_relic_v4: 训练=3581, 验证集=895 个决策, 特征维度=1121, d_model=256, n_heads=8, n_layers=3
+        Epoch  1/60  loss=0.7109  val_ndcg=0.8500 ★  lr=0.000180
+        Epoch  5/60  loss=0.6481  val_ndcg=0.8860 ★  lr=0.000500
+        Epoch 10/60  loss=0.4847  val_ndcg=0.8847  lr=0.000490
+        Epoch 15/60  loss=0.4540  val_ndcg=0.8840  lr=0.000461
+        Epoch 20/60  loss=0.4418  val_ndcg=0.8877 ★  lr=0.000415
+        Epoch 25/60  loss=0.4269  val_ndcg=0.8859  lr=0.000355
+        Epoch 30/60  loss=0.4073  val_ndcg=0.8880 ★  lr=0.000288
+        Epoch 35/60  loss=0.3955  val_ndcg=0.8869  lr=0.000217
+        Epoch 40/60  loss=0.3800  val_ndcg=0.8840  lr=0.000150
+        Epoch 45/60  loss=0.3629  val_ndcg=0.8793  lr=0.000090
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.8880)
+      Transformer boss_relic_v4 训练完成，已恢复最佳模型 (val_ndcg=0.8880)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\boss_relic_transformer_v4.pt
+    
+    === 训练篝火 V4 Transformer (A20 胜局) ===
+      A20 胜局决策数: 21927
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer campfire_v4: 训练=17542, 验证集=4385 个决策, 特征维度=978, d_model=256, n_heads=8, n_layers=3
+        Epoch  1/60  loss=0.6930  val_ndcg=0.9391 ★  lr=0.000180
+        Epoch  5/60  loss=0.3688  val_ndcg=0.9494 ★  lr=0.000500
+        Epoch 10/60  loss=0.3113  val_ndcg=0.9553 ★  lr=0.000490
+        Epoch 15/60  loss=0.2889  val_ndcg=0.9542  lr=0.000461
+        Epoch 20/60  loss=0.2767  val_ndcg=0.9517  lr=0.000415
+        Epoch 25/60  loss=0.2604  val_ndcg=0.9531  lr=0.000355
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.9553)
+      Transformer campfire_v4 训练完成，已恢复最佳模型 (val_ndcg=0.9553)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\campfire_transformer_v4.pt
+    
+    === 训练商店 V4 Transformer (A20 胜局) ===
+      A20 胜局决策数: 404
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer shop_v4: 训练=324, 验证集=80 个决策, 特征维度=1536, d_model=256, n_heads=8, n_layers=3
+        Epoch  1/60  loss=0.2233  val_ndcg=0.9855 ★  lr=0.000180
+        Epoch  5/60  loss=0.0742  val_ndcg=0.9855  lr=0.000500
+        Epoch 10/60  loss=0.0664  val_ndcg=0.9872 ★  lr=0.000490
+        Epoch 15/60  loss=0.0620  val_ndcg=0.9872  lr=0.000461
+        Epoch 20/60  loss=0.0656  val_ndcg=0.9872  lr=0.000415
+        Epoch 25/60  loss=0.0691  val_ndcg=0.9872  lr=0.000355
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.9872)
+      Transformer shop_v4 训练完成，已恢复最佳模型 (val_ndcg=0.9872)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\silent_advisor\models\shop_transformer_v4.pt
+    
+    V4 训练完成！
+
+  [2026-06-11 20:59:45] silent V4 完成 ✓
+
+==================================================================
+  训练结果汇总
+==================================================================
+  角色            DB      V1      V2      V3      V4    
+  ----------------------------------------------------
+  silent        ✓     ✓     ✓     ✓     ✓   
+
+  总计: 5 步，5 成功，0 失败
+  日志已保存至: F:\AI_Learn\slay_of_spire\STS1\logs\train_20260611_203721.log
