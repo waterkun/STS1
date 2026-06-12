@@ -30,7 +30,8 @@
       "Bash(done)",
       "Bash(powershell:*)",
       "mcp__ide__executeCode",
-      "Bash(find /Users/neil/STS/Slay-the-Spire-data -name *.run -not -path */.*)"
+      "Bash(find /Users/neil/STS/Slay-the-Spire-data -name *.run -not -path */.*)",
+      "Bash(find /Users/neil/STS/Slay-the-Spire-data -maxdepth 2 -name *.log)"
     ]
   }
 }
