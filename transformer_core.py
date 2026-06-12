@@ -238,16 +238,17 @@ def _collate_decisions(batch_X, batch_y, device):
 
 
 def train_transformer(decisions_X, decisions_y,
-                      d_model=128, n_heads=4, d_ff=256, n_layers=2,
+                      d_model=256, n_heads=8, d_ff=512, n_layers=3,
                       n_epochs=60, lr=5e-4, batch_size=128,
-                      name="model", decisions_w=None):
+                      name="model", decisions_w=None, patience=15):
     """
     训练一个 STSTransformerRanker。
 
     decisions_X: list of (N_i, F) feature arrays (每个决策一个)
     decisions_y: list of (N_i,) label arrays (2/1/0 相关性标签)
     decisions_w: list of float (每个决策的质量权重), 可选
-    返回: 训练好的 STSTransformerRanker (在 CPU 上)
+    patience:    早停等待 epoch 数，val_ndcg 连续 patience epoch 无提升则停止；0=禁用
+    返回: 训练好的 STSTransformerRanker (最佳 val_ndcg checkpoint，在 CPU 上)
     """
     if not decisions_X:
         print(f"  {name}: 无训练数据，跳过", flush=True)
@@ -332,6 +333,11 @@ def train_transformer(decisions_X, decisions_y,
         return 0.01 + 0.99 * 0.5 * (1.0 + math.cos(math.pi * progress))
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
+    # 早停：跟踪最佳 val_ndcg，保存对应 checkpoint
+    best_val_ndcg = -1.0
+    best_state_dict = None
+    no_improve_epochs = 0
+
     for epoch in range(n_epochs):
         # 每个 epoch 对排序后的索引做局部打乱（在相近长度内打乱）
         perm = sorted_indices.copy()
@@ -400,11 +406,27 @@ def train_transformer(decisions_X, decisions_y,
             current_lr = scheduler.get_last_lr()[0]
             if val_X is not None:
                 val_ndcg = _compute_val_ndcg(model, val_X, val_y, device)
-                print(f"    Epoch {epoch+1:>2d}/{n_epochs}  loss={avg:.4f}  val_ndcg={val_ndcg:.4f}  lr={current_lr:.6f}", flush=True)
+                is_best = val_ndcg > best_val_ndcg
+                if is_best:
+                    best_val_ndcg = val_ndcg
+                    best_state_dict = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+                    no_improve_epochs = 0
+                else:
+                    no_improve_epochs += 5
+                marker = " ★" if is_best else ""
+                print(f"    Epoch {epoch+1:>2d}/{n_epochs}  loss={avg:.4f}  val_ndcg={val_ndcg:.4f}{marker}  lr={current_lr:.6f}", flush=True)
+                if patience > 0 and no_improve_epochs >= patience:
+                    print(f"  早停: {no_improve_epochs} epoch 无提升，停止训练 (最佳 val_ndcg={best_val_ndcg:.4f})", flush=True)
+                    break
             else:
                 print(f"    Epoch {epoch+1:>2d}/{n_epochs}  loss={avg:.4f}  lr={current_lr:.6f}", flush=True)
 
-    print(f"  Transformer {name} 训练完成", flush=True)
+    # 恢复最佳 checkpoint
+    if best_state_dict is not None:
+        model.load_state_dict(best_state_dict)
+        print(f"  Transformer {name} 训练完成，已恢复最佳模型 (val_ndcg={best_val_ndcg:.4f})", flush=True)
+    else:
+        print(f"  Transformer {name} 训练完成", flush=True)
 
     # 训练完成后移回 CPU 以便序列化和跨设备推理
     model.cpu()
