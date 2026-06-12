@@ -390,6 +390,15 @@ def boss_context_features(act: int, act1_boss: str = "", act2_boss: str = "") ->
     return feat
 
 
+def _card_feature_row(base, da_feats, tempo, extra, synergy, relic_card_syn,
+                      archetype_feats, boss_feats, option_vec) -> np.ndarray:
+    """Card feature vector layout — single source of truth.
+    All training and inference paths must call this function so feature
+    order stays consistent automatically."""
+    return np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn,
+                           archetype_feats, boss_feats, option_vec])
+
+
 # ---------------------------------------------------------------------------
 # 模型 A: LambdaMART 排序模型 - 数据构造
 # ---------------------------------------------------------------------------
@@ -440,8 +449,8 @@ def build_card_ranking_data(db: dict, vocab: dict):
             synergy = card_synergy_features(option, d["deck"])
             relic_card_syn = relic_card_synergy_features(option, d["deck"], d["relics"])
             archetype_feats = archetype_completion_features(option, d["deck"])
-            row = np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn,
-                                  archetype_feats, boss_feats, option_vec])
+            row = _card_feature_row(base, da_feats, tempo, extra, synergy, relic_card_syn,
+                                    archetype_feats, boss_feats, option_vec)
             rows.append(row)
 
             # 标签
@@ -653,6 +662,7 @@ def build_card_choice_data(db: dict, vocab: dict):
         is_boss = 1.0 if d.get("is_boss_reward", False) else 0.0
         da_feats = deck_analysis_features(d["deck"])
         tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
+        boss_feats = boss_context_features(d["act"], d.get("act1_boss", ""), d.get("act2_boss", ""))
 
         for option in offered:
             option_vec = np.zeros(len(card_to_idx), dtype=np.float32)
@@ -669,7 +679,9 @@ def build_card_choice_data(db: dict, vocab: dict):
                               count_in_deck], dtype=np.float32)
             synergy = card_synergy_features(option, d["deck"])
             relic_card_syn = relic_card_synergy_features(option, d["deck"], d["relics"])
-            row = np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn, option_vec])
+            archetype_feats = archetype_completion_features(option, d["deck"])
+            row = _card_feature_row(base, da_feats, tempo, extra, synergy, relic_card_syn,
+                                    archetype_feats, boss_feats, option_vec)
             rows.append(row)
             labels.append(1 if option == d["picked"] else 0)
 
@@ -1218,8 +1230,8 @@ def card_inference_features_v2(floor: int, act: int, hp_pct: int,
         synergy = card_synergy_features(option, deck)
         relic_card_syn = relic_card_synergy_features(option, deck, relics)
         archetype_feats = archetype_completion_features(option, deck)
-        rows.append(np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn,
-                                    archetype_feats, boss_feats, option_vec]))
+        rows.append(_card_feature_row(base, da_feats, tempo, extra, synergy, relic_card_syn,
+                                      archetype_feats, boss_feats, option_vec))
 
     return np.array(rows)
 
