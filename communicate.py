@@ -432,14 +432,21 @@ def load_advisor(character: str) -> dict | None:
         log(f"[LOAD] {pkg}.ml_advisor_v2 导入失败 (仅使用 V1):\n{traceback.format_exc()}")
 
     # 加载数据和模型
-    db = v1_mod.load_db()
-    vocab = v1_mod.load_vocab()
-    v1_models = {
-        "card": v1_mod.load_models("card"),
-        "campfire": v1_mod.load_models("campfire"),
-        "boss_relic": v1_mod.load_models("boss_relic"),
-        "shop": v1_mod.load_models("shop"),
-    }
+    try:
+        log(f"[LOAD] 加载 {character} DB...")
+        db = v1_mod.load_db()
+        log(f"[LOAD] {character} DB 加载完毕")
+        vocab = v1_mod.load_vocab()
+        log(f"[LOAD] {character} vocab 加载完毕")
+        v1_models = {
+            "card": v1_mod.load_models("card"),
+            "campfire": v1_mod.load_models("campfire"),
+            "boss_relic": v1_mod.load_models("boss_relic"),
+            "shop": v1_mod.load_models("shop"),
+        }
+    except Exception:
+        log(f"[LOAD] {character} DB/V1模型加载失败:\n{traceback.format_exc()}")
+        return None
     log(f"[LOAD] {character} V1 模型加载完毕。")
 
     v2_models = None
