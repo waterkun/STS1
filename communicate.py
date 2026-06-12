@@ -438,15 +438,17 @@ def load_advisor(character: str) -> dict | None:
         log(f"[LOAD] {character} DB 加载完毕")
         vocab = v1_mod.load_vocab()
         log(f"[LOAD] {character} vocab 加载完毕")
-        v1_models = {
-            "card": v1_mod.load_models("card"),
-            "campfire": v1_mod.load_models("campfire"),
-            "boss_relic": v1_mod.load_models("boss_relic"),
-            "shop": v1_mod.load_models("shop"),
-        }
-    except Exception:
-        log(f"[LOAD] {character} DB/V1模型加载失败:\n{traceback.format_exc()}")
+    except (Exception, SystemExit):
+        log(f"[LOAD] {character} DB/vocab 加载失败:\n{traceback.format_exc()}")
         return None
+
+    v1_models = {}
+    for name in ("card", "campfire", "boss_relic", "shop"):
+        try:
+            v1_models[name] = v1_mod.load_models(name)
+        except (SystemExit, Exception):
+            log(f"[LOAD] {character} V1 {name} 模型不存在，跳过")
+            v1_models[name] = {}
     log(f"[LOAD] {character} V1 模型加载完毕。")
 
     v2_models = None
