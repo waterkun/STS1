@@ -33,3 +33,55 @@
 2026-06-11 21:17:44,055 [LOAD] 加载 THE_SILENT DB...
 2026-06-11 21:17:47,163 [LOAD] THE_SILENT DB 加载完毕
 2026-06-11 21:17:47,163 [LOAD] THE_SILENT vocab 加载完毕
+2026-06-11 21:25:04,101 [BOOT] unified script started, python=E:\anaconda3\envs\slay_spire\python.exe
+2026-06-11 21:25:04,101 [BOOT] argv=['F:\\AI_Learn\\slay_of_spire\\STS1\\communicate.py']
+2026-06-11 21:25:04,101 [BOOT] cwd=F:\SteamLibrary\steamapps\common\SlayTheSpire
+2026-06-11 21:25:04,101 [SEND] ready
+2026-06-11 21:26:24,360 [BOOT] unified script started, python=E:\anaconda3\envs\slay_spire\python.exe
+2026-06-11 21:26:24,360 [BOOT] argv=['F:\\AI_Learn\\slay_of_spire\\STS1\\communicate.py']
+2026-06-11 21:26:24,360 [BOOT] cwd=F:\SteamLibrary\steamapps\common\SlayTheSpire
+2026-06-11 21:26:24,360 [SEND] ready
+2026-06-11 21:28:38,778 [MAIN] 检测到角色: THE_SILENT
+2026-06-11 21:28:38,778 [LOAD] 正在加载 THE_SILENT advisor (silent_advisor)...
+2026-06-11 21:28:39,603 [LOAD] silent_advisor.ml_advisor 导入成功
+2026-06-11 21:28:39,654 [LOAD] silent_advisor.ml_advisor_v2 导入成功
+2026-06-11 21:28:39,654 [LOAD] 加载 THE_SILENT DB...
+2026-06-11 21:28:42,605 [LOAD] THE_SILENT DB 加载完毕
+2026-06-11 21:28:42,605 [LOAD] THE_SILENT vocab 加载完毕
+2026-06-11 21:28:42,605 [LOAD] THE_SILENT V1 card 模型不存在，跳过
+2026-06-11 21:28:42,605 [LOAD] THE_SILENT V1 campfire 模型不存在，跳过
+2026-06-11 21:28:42,605 [LOAD] THE_SILENT V1 boss_relic 模型不存在，跳过
+2026-06-11 21:28:42,605 [LOAD] THE_SILENT V1 shop 模型不存在，跳过
+2026-06-11 21:28:42,605 [LOAD] THE_SILENT V1 模型加载完毕。
+2026-06-11 21:28:42,628 [LOAD] THE_SILENT V2 模型加载完毕: ['card_lambdamart', 'card_logreg', 'card_cwr', 'boss_relic_lambdamart', 'boss_relic_logreg', 'boss_relic_cwr', 'campfire_lambdamart', 'campfire_logreg', 'campfire_cwr', 'shop_lambdamart', 'shop_logreg', 'shop_cwr']
+2026-06-11 21:28:44,535 [LOAD] silent_advisor.ml_advisor_v3 导入成功
+2026-06-11 21:28:44,614 [LOAD] THE_SILENT V3 模型加载完毕: ['card_transformer_v3', 'boss_relic_transformer_v3', 'campfire_transformer_v3', 'shop_transformer_v3']
+2026-06-11 21:28:44,614 [LOAD] silent_advisor.ml_advisor_v4 导入成功
+2026-06-11 21:28:44,685 [LOAD] THE_SILENT V4 模型加载完毕: ['card_transformer_v4', 'boss_relic_transformer_v4', 'campfire_transformer_v4', 'shop_transformer_v4']
+2026-06-11 21:28:44,685 [LOAD] THE_SILENT advisor 加载完毕。
+2026-06-11 21:28:51,678 [MAIN] 处理 CARD_REWARD 时出错:
+Traceback (most recent call last):
+  File "F:\AI_Learn\slay_of_spire\STS1\communicate.py", line 646, in main
+    handle_card_reward(gs, floor, act, hp_pct, deck, relics, current_ctx)
+  File "F:\AI_Learn\slay_of_spire\STS1\communicate.py", line 212, in handle_card_reward
+    preds = ctx["predict_all_card"](
+  File "F:\AI_Learn\slay_of_spire\STS1\silent_advisor\ml_advisor_v2.py", line 1379, in predict_all_card
+    preds["logreg"] = predict_choice(v2_models["card_logreg"], X_v2)
+  File "F:\AI_Learn\slay_of_spire\STS1\silent_advisor\ml_advisor_v2.py", line 1181, in predict_choice
+    return pipe.predict_proba(X)[:, 1]
+  File "E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\pipeline.py", line 904, in predict_proba
+    Xt = transform.transform(Xt)
+  File "E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\_set_output.py", line 316, in wrapped
+    data_to_wrap = f(self, X, *args, **kwargs)
+  File "E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\impute\_base.py", line 625, in transform
+    X = self._validate_input(X, in_fit=False)
+  File "E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\impute\_base.py", line 379, in _validate_input
+    raise ve
+  File "E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\impute\_base.py", line 360, in _validate_input
+    X = validate_data(
+  File "E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py", line 2975, in validate_data
+    _check_n_features(_estimator, X, reset=reset)
+  File "E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py", line 2839, in _check_n_features
+    raise ValueError(
+ValueError: X has 1414 features, but SimpleImputer is expecting 1397 features as input.
+
