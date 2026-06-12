@@ -76,25 +76,32 @@ V2 在 V1 基础上新增特征（观者为例）：
 
 ```
 输入 (N, F)
-  → Linear(F, d_model=128)           # 投影到隐空间
+  → Linear(F, d_model=256)           # 投影到隐空间（256维工作空间）
   → Dropout(0.1)
-  → 2 × TransformerBlock(Pre-Norm)   # 自注意力 + FFN
-      LN → MultiHeadAttention(4头) → Dropout → 残差
-      LN → FFN(d_ff=256, ReLU)     → Dropout → 残差
+  → 3 × TransformerBlock(Pre-Norm)   # 自注意力 + FFN，共 3 层
+      LN → MultiHeadAttention(8头, 每头32维) → Dropout → 残差
+      LN → FFN(d_ff=512, ReLU)              → Dropout → 残差
   → Linear(d_model, 1)               # 每个选项输出一个分数
   → softmax                          # 归一化为概率 (N,)
 ```
 
 其中 N = 本次决策的候选选项数（卡牌奖励 N≈3，Boss 遗物 N=3，篝火 N=2，商店 N=5~10）。
 
+**各参数含义**：
+- `d_model=256`：每个候选选项的隐空间维度，输入特征（1436维）先投影到此空间，越大保留信息越多
+- `n_heads=8`：多头注意力头数，每头在 32 维子空间独立计算选项间关系（格挡协同、卡池缺口、时序价值等），8头并行
+- `n_layers=3`：Transformer 层数，每层让所有选项再互相感知一次，层数越深能捕捉越高阶的交互关系
+- `d_ff=512`：FFN 中间层维度（= 2× d_model），注意力收集信息后由此做非线性变换提取复杂模式
+
 **训练细节**：
 - 损失函数：**Pairwise Margin Loss**（softplus 形式）—— 对每对 `label_i > label_j` 的选项计算 `softplus(score_j - score_i)`，按标签差值（`label_i - label_j`）加权，使高置信度排序对（如 2vs0）获得两倍于低置信度对（2vs1 或 1vs0）的梯度信号
 - 标签：2=选了且赢 / 1=选了且输 / 0=没选，按 `(0.3 + 0.7×asc/20) × (1.2 if win else 0.6)` 对每个决策加权（高阶胜局权重更高）
 - 变长候选集处理：padding + `key_padding_mask` 屏蔽 padding 位置的注意力
-- LR 调度：前 5 epoch 线性 warmup（0.2→1.0），之后 cosine decay 至 1%（共 60 epoch）
+- LR 调度：前 5 epoch 线性 warmup（0.2→1.0），之后 cosine decay 至 1%（最多 60 epoch）
 - 梯度裁剪：`clip_grad_norm_(max_norm=1.0)`
 - 训练用 CUDA（若可用），推理时模型移回 CPU 序列化
-- **验证集评估**：训练时自动按决策随机抽取 20% 作为 hold-out 验证集（seed=42），每 5 epoch 计算一次 validation NDCG，实时监控过拟合；数据不足 10 条时跳过验证
+- **验证集评估**：训练时自动按决策随机抽取 20% 作为 hold-out 验证集（seed=42），每 5 epoch 计算一次 validation NDCG，创新高时标记 ★ 并保存 checkpoint；数据不足 10 条时跳过验证
+- **早停**：连续 15 epoch val_ndcg 无提升自动停止，训练结束后恢复最佳 checkpoint（而非最终 epoch 的权重）
 
 **后处理**：对卡组中已有的能力牌（Power）候选项施加 ×0.5 重复惩罚，避免推荐无意义的重复能力牌。
 
@@ -349,6 +356,8 @@ STS1/
 - [x] V4 A20 胜局专用 Transformer（仅学习顶级胜局策略，永不从失败中学习）
 - [x] V3/V4 集成至 communicate.py（全部四角色，Borda Count 投票）
 - [x] V3/V4 训练时 hold-out 验证集 NDCG 评估（每 5 epoch 报告，监控过拟合）
+- [x] 早停 + 最佳 checkpoint 保存（patience=15 epoch，返回峰值模型而非最终 epoch）
+- [x] 扩容至 d_model=256 / n_heads=8 / n_layers=3 / d_ff=512（提升卡牌等高维场景的表达能力）
 - [ ] 观者 / 机器人 V3 + V4 Transformer 训练
 - [ ] 静默猎手 / 机器人 V1 模型训练
 

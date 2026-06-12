@@ -262,7 +262,8 @@ def print_predictions(options: list[str], preds: dict,
 
 def handle_card_reward(gs, floor, act, hp_pct, deck, relics, db, vocab,
                        v1_models, v2_models, v3_models=None, v4_models=None,
-                       num_upgrades=0, deck_upgrades=None):
+                       num_upgrades=0, deck_upgrades=None,
+                       act1_boss="", act2_boss=""):
     screen = gs.get("screen_state", {})
     cards = screen.get("cards", [])
 
@@ -282,7 +283,7 @@ def handle_card_reward(gs, floor, act, hp_pct, deck, relics, db, vocab,
     if v2_models is not None:
         preds = predict_all_card(card_ids, floor, act, hp_pct, deck, relics,
                                  db, vocab, v1_models, v2_models,
-                                 num_upgrades, deck_upgrades)
+                                 num_upgrades, deck_upgrades, act1_boss, act2_boss)
     else:
         stats = db["card_decisions"]["stats"]
         X = card_inference_features(floor, act, hp_pct, deck, relics,
@@ -292,10 +293,12 @@ def handle_card_reward(gs, floor, act, hp_pct, deck, relics, db, vocab,
 
     if v3_models:
         preds.update(_predict_card_v3(card_ids, floor, act, hp_pct, deck, relics,
-                                      db, vocab, v3_models, num_upgrades, deck_upgrades))
+                                      db, vocab, v3_models, num_upgrades, deck_upgrades,
+                                      act1_boss, act2_boss))
     if v4_models:
         preds.update(_predict_card_v4(card_ids, floor, act, hp_pct, deck, relics,
-                                      db, vocab, v4_models, num_upgrades, deck_upgrades))
+                                      db, vocab, v4_models, num_upgrades, deck_upgrades,
+                                      act1_boss, act2_boss))
 
     hp = gs.get("current_hp", 0)
     max_hp = gs.get("max_hp", 1)
@@ -510,6 +513,10 @@ def main():
         models_loaded = True
         log("模型加载完毕。")
 
+    act1_boss = ""
+    act2_boss = ""
+    _last_act = 0
+
     while True:
         msg = read_json_from_stdin()
         if msg is None:
@@ -517,6 +524,10 @@ def main():
             break
 
         if not msg.get("in_game"):
+            # Reset boss tracking on game exit
+            act1_boss = ""
+            act2_boss = ""
+            _last_act = 0
             send("wait")
             continue
 
@@ -537,6 +548,16 @@ def main():
         screen = gs.get("screen_type", "")
         floor = gs.get("floor", 0)
         act = gs.get("act", 1)
+
+        # Track boss names across act transitions
+        # gs["boss"] shows the upcoming/current boss for the current act
+        current_boss = gs.get("boss", "")
+        if act == 1 and current_boss:
+            act1_boss = current_boss
+        elif act == 2 and current_boss:
+            act2_boss = current_boss
+        if act != _last_act:
+            _last_act = act
 
         if screen not in ("CARD_REWARD", "REST", "BOSS_REWARD", "SHOP_SCREEN"):
             send("wait")
@@ -566,7 +587,7 @@ def main():
         if screen == "CARD_REWARD":
             handle_card_reward(gs, floor, act, hp_pct, deck, relics,
                                db, vocab, v1_models, v2_models, v3_models, v4_models,
-                               num_upgrades, deck_upgrades)
+                               num_upgrades, deck_upgrades, act1_boss, act2_boss)
             handled = True
         elif screen == "REST":
             handle_campfire(gs, floor, act, hp_pct, deck, relics,

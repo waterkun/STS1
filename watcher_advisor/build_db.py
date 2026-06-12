@@ -151,6 +151,21 @@ def get_hp_at(run: dict, floor: int | float) -> tuple[int | None, int | None]:
 # Card decisions
 # ---------------------------------------------------------------------------
 
+def get_run_bosses(run: dict) -> dict:
+    """从 damage_taken 提取各 act 的 boss 名称。"""
+    bosses = {"act1_boss": "", "act2_boss": "", "act3_boss": ""}
+    for entry in run.get("damage_taken", []):
+        floor = entry.get("floor", 0)
+        enemies = entry.get("enemies", "")
+        if floor == 16:
+            bosses["act1_boss"] = enemies
+        elif floor == 33:
+            bosses["act2_boss"] = enemies
+        elif floor == 50:
+            bosses["act3_boss"] = enemies
+    return bosses
+
+
 def build_card_decisions(runs: list[dict]) -> dict:
     pick_count: dict[str, int] = defaultdict(int)
     picked_count: dict[str, int] = defaultdict(int)
@@ -162,6 +177,7 @@ def build_card_decisions(runs: list[dict]) -> dict:
     for run in runs:
         victory = run["victory"]
         ascension = run.get("ascension_level", 0)
+        run_bosses = get_run_bosses(run)
 
         for choice in run.get("card_choices", []):
             floor = choice["floor"]
@@ -202,6 +218,8 @@ def build_card_decisions(runs: list[dict]) -> dict:
                 "picked": picked,
                 "ascension_level": ascension,
                 "victory": victory,
+                "act1_boss": run_bosses["act1_boss"] if act > 1 else "",
+                "act2_boss": run_bosses["act2_boss"] if act > 2 else "",
             })
 
         # Win rate when card is in final deck

@@ -29,7 +29,8 @@
       "Bash(fi:*)",
       "Bash(done)",
       "Bash(powershell:*)",
-      "mcp__ide__executeCode"
+      "mcp__ide__executeCode",
+      "Bash(find /Users/neil/STS/Slay-the-Spire-data -name *.run -not -path */.*)"
     ]
   }
 }

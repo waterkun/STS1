@@ -145,13 +145,15 @@ def predict_all_card(options: list[str], floor: int, act: int, hp_pct: int,
                      deck: list[str], relics: list[str],
                      db: dict, vocab: dict, v3_models: dict,
                      num_upgrades: int = 0,
-                     deck_upgrades: dict | None = None) -> dict[str, np.ndarray]:
+                     deck_upgrades: dict | None = None,
+                     act1_boss: str = "", act2_boss: str = "") -> dict[str, np.ndarray]:
     if "card_transformer_v3" not in v3_models:
         return {}
     stats = db["card_decisions"]["stats"]
     X = card_inference_features_v2(floor, act, hp_pct, deck, relics,
                                    options, stats, vocab,
-                                   num_upgrades, deck_upgrades).astype(np.float32)
+                                   num_upgrades, deck_upgrades,
+                                   act1_boss, act2_boss).astype(np.float32)
     probs = v3_models["card_transformer_v3"].predict(X)
     preds = {"transformer": probs}
     preds = _apply_duplicate_power_penalty(options, deck, preds)

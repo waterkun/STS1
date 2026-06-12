@@ -184,6 +184,12 @@ _ARCHETYPES = {
     "thin_deck": set(),
 }
 
+_ARCHETYPE_CORE = {k: v for k, v in _ARCHETYPES.items() if k != "thin_deck"}
+_ARCHETYPE_NAMES = sorted(_ARCHETYPE_CORE.keys())  # claw, focus_power, frost_block, lightning
+_KEY_ENGINES = sorted(["Biased Cognition", "Creative AI", "Echo Form", "Electrodynamics"])
+_ACT1_BOSSES = ["Hexaghost", "Slime Boss", "The Guardian"]
+_ACT2_BOSSES = ["The Champ", "Automaton", "The Collector"]
+
 _KEYWORD_GROUPS = [
     _FROST_GENERATORS, _FROST_PAYOFF,
     _LIGHTNING_GENERATORS, _LIGHTNING_PAYOFF,
@@ -345,6 +351,57 @@ def temporal_features(floor: int, act: int, hp_pct: float) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
+# 流派完成度 + Boss 上下文特征
+# ---------------------------------------------------------------------------
+
+def archetype_completion_features(card: str, deck: list[str]) -> np.ndarray:
+    """流派完成度特征（11 维）。"""
+    base = card.split("+")[0].strip()
+    deck_bases = set(c.split("+")[0].strip() for c in deck)
+    total = max(len(deck), 1)
+
+    card_in_arch = np.array(
+        [1.0 if base in _ARCHETYPE_CORE[a] else 0.0 for a in _ARCHETYPE_NAMES],
+        dtype=np.float32
+    )
+    deck_arch_scores = np.array(
+        [sum(1 for b in deck_bases if b in _ARCHETYPE_CORE[a]) / total for a in _ARCHETYPE_NAMES],
+        dtype=np.float32
+    )
+    dominant_idx = int(deck_arch_scores.argmax())
+    dominant_score = float(deck_arch_scores[dominant_idx])
+    card_fits_dominant = card_in_arch[dominant_idx]
+
+    deck_has_engine = np.array(
+        [1.0 if k in deck_bases else 0.0 for k in _KEY_ENGINES],
+        dtype=np.float32
+    )
+    card_is_engine = 1.0 if base in _KEY_ENGINES else 0.0
+
+    return np.concatenate([
+        card_in_arch,               # 4
+        [dominant_score],           # 1
+        [card_fits_dominant],       # 1
+        deck_has_engine,            # 4
+        [card_is_engine],           # 1
+    ])  # 共 11 维
+
+
+def boss_context_features(act: int, act1_boss: str = "", act2_boss: str = "") -> np.ndarray:
+    """Boss 上下文特征（6 维）。"""
+    feat = np.zeros(6, dtype=np.float32)
+    if act >= 2 and act1_boss:
+        for i, b in enumerate(_ACT1_BOSSES):
+            if b.lower() in act1_boss.lower():
+                feat[i] = 1.0
+    if act >= 3 and act2_boss:
+        for i, b in enumerate(_ACT2_BOSSES):
+            if b.lower() in act2_boss.lower():
+                feat[3 + i] = 1.0
+    return feat
+
+
+# ---------------------------------------------------------------------------
 # 排序数据构造（LambdaMART）
 # ---------------------------------------------------------------------------
 
@@ -366,6 +423,7 @@ def build_card_ranking_data(db: dict, vocab: dict):
         is_boss = 1.0 if d.get("is_boss_reward", False) else 0.0
         da_feats = deck_analysis_features(d["deck"])
         tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
+        boss_feats = boss_context_features(d["act"], d.get("act1_boss", ""), d.get("act2_boss", ""))
         group_size = 0
 
         for option in offered:
@@ -380,7 +438,9 @@ def build_card_ranking_data(db: dict, vocab: dict):
             extra = np.array([is_boss, is_skip, pick_rate, wrid, count_in_deck], dtype=np.float32)
             synergy = card_synergy_features(option, d["deck"])
             relic_card_syn = relic_card_synergy_features(option, d["deck"], d["relics"])
-            rows.append(np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn, option_vec]))
+            archetype_feats = archetype_completion_features(option, d["deck"])
+            rows.append(np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn,
+                                        archetype_feats, boss_feats, option_vec]))
             labels.append(2 if option == d["picked"] and d["victory"] else
                           1 if option == d["picked"] else 0)
             group_size += 1
@@ -941,13 +1001,15 @@ def train_choice_model(X, y, name: str, sample_weight=None):
 # ---------------------------------------------------------------------------
 
 def card_inference_features_v2(floor, act, hp_pct, deck, relics, options, stats,
-                                vocab, num_upgrades=0, deck_upgrades=None):
+                                vocab, num_upgrades=0, deck_upgrades=None,
+                                act1_boss="", act2_boss=""):
     card_to_idx = vocab["card_to_idx"]
     base = base_features(floor, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
                          num_upgrades, deck_upgrades)
     is_boss = 1.0 if floor in (16, 33) else 0.0
     da_feats = deck_analysis_features(deck)
     tempo = temporal_features(floor, act, hp_pct)
+    boss_feats = boss_context_features(act, act1_boss, act2_boss)
     rows = []
     for option in options:
         option_vec = np.zeros(len(card_to_idx), dtype=np.float32)
@@ -960,7 +1022,9 @@ def card_inference_features_v2(floor, act, hp_pct, deck, relics, options, stats,
                           card_count_in_deck(option, deck)], dtype=np.float32)
         synergy = card_synergy_features(option, deck)
         relic_card_syn = relic_card_synergy_features(option, deck, relics)
-        rows.append(np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn, option_vec]))
+        archetype_feats = archetype_completion_features(option, deck)
+        rows.append(np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn,
+                                    archetype_feats, boss_feats, option_vec]))
     return np.array(rows)
 
 
@@ -1094,14 +1158,16 @@ def _safe_predict_v1(v1_model_dict, X):
 # ---------------------------------------------------------------------------
 
 def predict_all_card(options, floor, act, hp_pct, deck, relics, db, vocab,
-                     v1_models, v2_models, num_upgrades=0, deck_upgrades=None):
+                     v1_models, v2_models, num_upgrades=0, deck_upgrades=None,
+                     act1_boss="", act2_boss=""):
     stats = db["card_decisions"]["stats"]
     preds = {}
     X_v1 = card_inference_features_v1(floor, act, hp_pct, deck, relics,
                                       options, stats, vocab, num_upgrades, deck_upgrades)
     preds.update(_safe_predict_v1(v1_models.get("card", {}), X_v1))
     X_v2 = card_inference_features_v2(floor, act, hp_pct, deck, relics,
-                                      options, stats, vocab, num_upgrades, deck_upgrades)
+                                      options, stats, vocab, num_upgrades, deck_upgrades,
+                                      act1_boss, act2_boss)
     if "card_lambdamart" in v2_models:
         preds["lambdamart"] = predict_ranking(v2_models["card_lambdamart"], X_v2)
     if "card_logreg" in v2_models:

@@ -289,6 +289,104 @@ def relic_deck_synergy_features(relic: str, deck: list[str]) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
+# 流派完成度特征（Option 1）
+# ---------------------------------------------------------------------------
+
+# 铁甲战士四大核心流派成员卡
+_ARCHETYPE_CORE = {
+    "barricade":  {"Barricade", "Body Slam", "Entrench", "Impervious",
+                   "Ghostly Armor", "Flame Barrier", "Power Through", "Shrug It Off"},
+    "corruption": {"Corruption", "Feel No Pain", "Dark Embrace", "Sentinel",
+                   "Second Wind", "Sever Soul"},
+    "strength":   {"Demon Form", "Inflame", "Spot Weakness", "Limit Break", "Rupture",
+                   "Heavy Blade", "Reaper", "Whirlwind"},
+    "exhaust":    {"Fiend Fire", "Burning Pact", "True Grit", "Second Wind",
+                   "Dark Embrace", "Feel No Pain", "Sentinel"},
+}
+_ARCHETYPE_NAMES = sorted(_ARCHETYPE_CORE.keys())   # 固定顺序: barricade, corruption, exhaust, strength
+
+# 解锁各流派的核心引擎牌（sorted 保证索引稳定）
+_KEY_ENGINES = sorted(["Barricade", "Corruption", "Demon Form", "Fiend Fire"])
+
+
+def archetype_completion_features(card: str, deck: list[str]) -> np.ndarray:
+    """流派完成度特征（11 维）。
+
+    per-candidate 特征，衡量候选卡与卡组当前流派方向的契合度：
+      card_in_archetype[4]  : 候选卡属于各流派？(4 dims)
+      deck_dominant_score   : 卡组最高流派完成度 (1 dim)
+      card_fits_dominant    : 候选卡属于主流派？ (1 dim)
+      deck_has_engine[4]    : 四张引擎牌在卡组中？(4 dims)
+      card_is_engine        : 候选卡是引擎牌？   (1 dim)
+    """
+    base = card.split("+")[0].strip()
+    deck_bases = set(c.split("+")[0].strip() for c in deck)
+    total = max(len(deck), 1)
+
+    # 候选卡的流派归属
+    card_in_arch = np.array(
+        [1.0 if base in _ARCHETYPE_CORE[a] else 0.0 for a in _ARCHETYPE_NAMES],
+        dtype=np.float32
+    )
+
+    # 卡组各流派完成度
+    deck_arch_scores = np.array(
+        [sum(1 for b in deck_bases if b in _ARCHETYPE_CORE[a]) / total for a in _ARCHETYPE_NAMES],
+        dtype=np.float32
+    )
+    dominant_idx = int(deck_arch_scores.argmax())
+    dominant_score = float(deck_arch_scores[dominant_idx])
+    card_fits_dominant = card_in_arch[dominant_idx]
+
+    # 引擎牌存在标志
+    deck_has_engine = np.array(
+        [1.0 if k in deck_bases else 0.0 for k in _KEY_ENGINES],
+        dtype=np.float32
+    )
+    card_is_engine = 1.0 if base in _KEY_ENGINES else 0.0
+
+    return np.concatenate([
+        card_in_arch,               # 4
+        [dominant_score],           # 1
+        [card_fits_dominant],       # 1
+        deck_has_engine,            # 4
+        [card_is_engine],           # 1
+    ])  # 共 11 维
+
+
+# ---------------------------------------------------------------------------
+# Boss 上下文特征（Option 2）
+# ---------------------------------------------------------------------------
+
+# STS 各 act 的 boss 名称列表（固定顺序用于 one-hot）
+_ACT1_BOSSES = ["Hexaghost", "Slime Boss", "The Guardian"]
+_ACT2_BOSSES = ["The Champ", "Automaton", "The Collector"]
+
+
+def boss_context_features(act: int, act1_boss: str = "", act2_boss: str = "") -> np.ndarray:
+    """Boss 上下文特征（6 维）。
+
+    记录玩家已经经历过的 boss（本 act 决策时尚不知晓）：
+      act1_boss_onehot[3]: Act1 boss 身份（Act2+ 决策时有值）
+      act2_boss_onehot[3]: Act2 boss 身份（Act3+ 决策时有值）
+
+    为 0 表示该 boss 尚未经历或不在已知列表中。
+    """
+    feat = np.zeros(6, dtype=np.float32)
+    if act >= 2 and act1_boss:
+        for i, b in enumerate(_ACT1_BOSSES):
+            if b.lower() in act1_boss.lower():
+                feat[i] = 1.0
+                break
+    if act >= 3 and act2_boss:
+        for i, b in enumerate(_ACT2_BOSSES):
+            if b.lower() in act2_boss.lower():
+                feat[3 + i] = 1.0
+                break
+    return feat
+
+
+# ---------------------------------------------------------------------------
 # 模型 A: LambdaMART 排序模型 - 数据构造
 # ---------------------------------------------------------------------------
 
@@ -363,6 +461,8 @@ def build_card_ranking_data(db: dict, vocab: dict):
         da_feats = deck_analysis_features(d["deck"])
         tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
 
+        boss_feats = boss_context_features(d["act"], d.get("act1_boss", ""), d.get("act2_boss", ""))
+
         group_size = 0
         for option in offered:
             option_vec = np.zeros(len(card_to_idx), dtype=np.float32)
@@ -379,7 +479,9 @@ def build_card_ranking_data(db: dict, vocab: dict):
                               count_in_deck], dtype=np.float32)
             synergy = card_synergy_features(option, d["deck"])
             relic_card_syn = relic_card_synergy_features(option, d["deck"], d["relics"])
-            row = np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn, option_vec])
+            archetype_feats = archetype_completion_features(option, d["deck"])
+            row = np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn,
+                                  archetype_feats, boss_feats, option_vec])
             rows.append(row)
 
             # 标签
@@ -1125,14 +1227,16 @@ def card_inference_features_v2(floor: int, act: int, hp_pct: int,
                                deck: list[str], relics: list[str],
                                options: list[str], stats: dict,
                                vocab: dict, num_upgrades: int = 0,
-                               deck_upgrades: dict | None = None) -> np.ndarray:
-    """V2 卡牌推理特征：base + deck_analysis + extra + option_vec。"""
+                               deck_upgrades: dict | None = None,
+                               act1_boss: str = "", act2_boss: str = "") -> np.ndarray:
+    """V2 卡牌推理特征：base + deck_analysis + extra + option_vec + archetype + boss。"""
     card_to_idx = vocab["card_to_idx"]
     base = base_features(floor, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
                          num_upgrades, deck_upgrades)
     is_boss = 1.0 if floor in (16, 33) else 0.0
     da_feats = deck_analysis_features(deck)
     tempo = temporal_features(floor, act, hp_pct)
+    boss_feats = boss_context_features(act, act1_boss, act2_boss)
     rows = []
 
     for option in options:
@@ -1150,7 +1254,9 @@ def card_inference_features_v2(floor: int, act: int, hp_pct: int,
                           count_in_deck], dtype=np.float32)
         synergy = card_synergy_features(option, deck)
         relic_card_syn = relic_card_synergy_features(option, deck, relics)
-        rows.append(np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn, option_vec]))
+        archetype_feats = archetype_completion_features(option, deck)
+        rows.append(np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn,
+                                    archetype_feats, boss_feats, option_vec]))
 
     return np.array(rows)
 
@@ -1284,7 +1390,8 @@ def predict_all_card(options: list[str], floor: int, act: int, hp_pct: int,
                      db: dict, vocab: dict,
                      v1_models: dict, v2_models: dict,
                      num_upgrades: int = 0,
-                     deck_upgrades: dict | None = None) -> dict[str, np.ndarray]:
+                     deck_upgrades: dict | None = None,
+                     act1_boss: str = "", act2_boss: str = "") -> dict[str, np.ndarray]:
     """所有模型的卡牌预测结果。"""
     stats = db["card_decisions"]["stats"]
     preds = {}
@@ -1298,7 +1405,8 @@ def predict_all_card(options: list[str], floor: int, act: int, hp_pct: int,
     # V2 特征
     X_v2 = card_inference_features_v2(floor, act, hp_pct, deck, relics,
                                       options, stats, vocab,
-                                      num_upgrades, deck_upgrades)
+                                      num_upgrades, deck_upgrades,
+                                      act1_boss, act2_boss)
 
     # LambdaMART
     if "card_lambdamart" in v2_models:
