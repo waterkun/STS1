@@ -112,6 +112,7 @@ def run_step(tee: Tee, char: str, step: str) -> bool:
 
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
 
     proc = subprocess.Popen(
         cmd,
