@@ -308,16 +308,22 @@ _ARCHETYPE_NAMES = sorted(_ARCHETYPE_CORE.keys())   # 固定顺序: barricade, c
 # 解锁各流派的核心引擎牌（sorted 保证索引稳定）
 _KEY_ENGINES = sorted(["Barricade", "Corruption", "Demon Form", "Fiend Fire"])
 
+# 抽牌引擎牌 vs 抽牌收益牌（用于 draw-payoff 特征）
+_DRAW_ENGINES_ARCH = {"Battle Trance", "Offering", "Pommel Strike", "Burning Pact"}
+_DRAW_PAYOFFS = {"Whirlwind", "Limit Break", "Fiend Fire", "Bludgeon"}
+
 
 def archetype_completion_features(card: str, deck: list[str]) -> np.ndarray:
-    """流派完成度特征（11 维）。
+    """流派完成度特征（13 维）。
 
     per-candidate 特征，衡量候选卡与卡组当前流派方向的契合度：
       card_in_archetype[4]  : 候选卡属于各流派？(4 dims)
       deck_dominant_score   : 卡组最高流派完成度 (1 dim)
       card_fits_dominant    : 候选卡属于主流派？ (1 dim)
       deck_has_engine[4]    : 四张引擎牌在卡组中？(4 dims)
-      card_is_engine        : 候选卡是引擎牌？   (1 dim)
+      card_is_engine        : 候选卡是核心引擎牌？(1 dim)
+      card_is_draw_engine   : 候选卡是抽牌引擎牌？(1 dim)
+      draw_payoff_in_deck   : 卡组有抽牌收益牌？  (1 dim)
     """
     base = card.split("+")[0].strip()
     deck_bases = set(c.split("+")[0].strip() for c in deck)
@@ -345,13 +351,19 @@ def archetype_completion_features(card: str, deck: list[str]) -> np.ndarray:
     )
     card_is_engine = 1.0 if base in _KEY_ENGINES else 0.0
 
+    # 抽牌 enabler vs payoff 分离特征
+    card_is_draw_engine = 1.0 if base in _DRAW_ENGINES_ARCH else 0.0
+    draw_payoff_in_deck = 1.0 if deck_bases & _DRAW_PAYOFFS else 0.0
+
     return np.concatenate([
         card_in_arch,               # 4
         [dominant_score],           # 1
         [card_fits_dominant],       # 1
         deck_has_engine,            # 4
         [card_is_engine],           # 1
-    ])  # 共 11 维
+        [card_is_draw_engine],      # 1
+        [draw_payoff_in_deck],      # 1
+    ])  # 共 13 维
 
 
 # ---------------------------------------------------------------------------

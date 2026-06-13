@@ -187,6 +187,10 @@ _ARCHETYPES = {
 _ARCHETYPE_CORE = {k: v for k, v in _ARCHETYPES.items() if k != "thin_deck"}
 _ARCHETYPE_NAMES = sorted(_ARCHETYPE_CORE.keys())  # claw, focus_power, frost_block, lightning
 _KEY_ENGINES = sorted(["Biased Cognition", "Creative AI", "Echo Form", "Electrodynamics"])
+
+# 抽牌引擎牌 vs 抽牌收益牌
+_DRAW_ENGINES_ARCH = {"Hologram", "Compile Driver", "Recursion"}
+_DRAW_PAYOFFS = {"Electrodynamics", "Blizzard", "Meteor Strike", "Hyperbeam", "Thunder Strike"}
 _ACT1_BOSSES = ["Hexaghost", "Slime Boss", "The Guardian"]
 _ACT2_BOSSES = ["The Champ", "Automaton", "The Collector"]
 
@@ -355,7 +359,7 @@ def temporal_features(floor: int, act: int, hp_pct: float) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 def archetype_completion_features(card: str, deck: list[str]) -> np.ndarray:
-    """流派完成度特征（11 维）。"""
+    """流派完成度特征（13 维）。"""
     base = card.split("+")[0].strip()
     deck_bases = set(c.split("+")[0].strip() for c in deck)
     total = max(len(deck), 1)
@@ -378,13 +382,18 @@ def archetype_completion_features(card: str, deck: list[str]) -> np.ndarray:
     )
     card_is_engine = 1.0 if base in _KEY_ENGINES else 0.0
 
+    card_is_draw_engine = 1.0 if base in _DRAW_ENGINES_ARCH else 0.0
+    draw_payoff_in_deck = 1.0 if deck_bases & _DRAW_PAYOFFS else 0.0
+
     return np.concatenate([
         card_in_arch,               # 4
         [dominant_score],           # 1
         [card_fits_dominant],       # 1
         deck_has_engine,            # 4
         [card_is_engine],           # 1
-    ])  # 共 11 维
+        [card_is_draw_engine],      # 1
+        [draw_payoff_in_deck],      # 1
+    ])  # 共 13 维
 
 
 def boss_context_features(act: int, act1_boss: str = "", act2_boss: str = "") -> np.ndarray:
