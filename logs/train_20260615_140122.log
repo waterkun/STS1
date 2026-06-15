@@ -1,0 +1,469 @@
+
+==================================================================
+  杀戮尖塔 AI 训练控制器  2026-06-15 14:01:22
+==================================================================
+  角色: ironclad
+  步骤: db, v1, v2, v3, v4
+  日志: F:\AI_Learn\slay_of_spire\STS1\logs\train_20260615_140122.log
+
+------------------------------------------------------------------
+  步骤: DB
+------------------------------------------------------------------
+
+  [2026-06-15 14:01:22] 开始 ironclad DB
+  命令: python -u -m ironclad_advisor.build_db
+
+    Loading Ironclad runs...
+    Loaded 14586 runs (3484 wins, 11102 losses)
+    
+    Building card decision database...
+      250260 decision points, 345 unique cards
+    Building boss relic database...
+      16185 boss relic decisions
+    Building campfire database...
+      80759 campfire decisions
+    Building shop database...
+      706 shop visits
+    
+    Done. Database written to F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\db/
+
+  [2026-06-15 14:01:36] ironclad DB 完成 ✓
+
+------------------------------------------------------------------
+  步骤: V1
+------------------------------------------------------------------
+
+  [2026-06-15 14:01:36] 开始 ironclad V1
+  命令: python -u -m ironclad_advisor.ml_advisor train
+
+    加载数据库...
+    构建词表...
+      卡牌词表: 412 张
+      遗物词表: 137 个
+    词表已保存到 F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\vocab.pkl
+    
+    === 训练卡牌决策模型 ===
+      样本数: 250260, 正样本: 102012, 负样本: 148248
+      xgboost: AUC=0.7616, Accuracy=0.7262
+      Top 10 特征:
+        act_1: 0.0941
+        act_2: 0.0705
+        num_relics: 0.0703
+        floor: 0.0269
+        deck_size: 0.0186
+        hp_pct: 0.0124
+        deck_Corruption: 0.0107
+        deck_Feel No Pain: 0.0090
+        deck_Shockwave: 0.0083
+        deck_Feed: 0.0077
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+      lightgbm: AUC=0.7610, Accuracy=0.7251
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\card_xgboost.pkl
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\card_lightgbm.pkl
+    
+    === 训练篝火决策模型 ===
+      样本数: 80759, 正样本: 32527, 负样本: 48232
+      xgboost: AUC=0.7750, Accuracy=0.7318
+      Top 10 特征:
+        num_relics: 0.0689
+        act_2: 0.0330
+        hp_above_70: 0.0265
+        floor: 0.0218
+        hp_pct: 0.0169
+        deck_Corruption: 0.0117
+        hp_below_30: 0.0112
+        deck_Feed: 0.0088
+        relic_Dead Branch: 0.0083
+        deck_Shockwave: 0.0083
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+      lightgbm: AUC=0.7747, Accuracy=0.7327
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\campfire_xgboost.pkl
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\campfire_lightgbm.pkl
+    
+    === 训练 Boss 遗物决策模型 ===
+      样本数: 16121, 正样本: 6957, 负样本: 9164
+      xgboost: AUC=0.7418, Accuracy=0.6867
+      Top 10 特征:
+        act_2: 0.0848
+        relic_win_rate: 0.0273
+        num_relics: 0.0131
+        deck_Corruption: 0.0120
+        relic_Dead Branch: 0.0096
+        upgrade_Dark Embrace: 0.0083
+        deck_Feed: 0.0083
+        relic_Toxic Egg 2: 0.0083
+        upgrade_Fiend Fire: 0.0080
+        upgrade_Corruption: 0.0075
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+      lightgbm: AUC=0.7389, Accuracy=0.6833
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\boss_relic_xgboost.pkl
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\boss_relic_lightgbm.pkl
+    
+    === 训练商店决策模型 ===
+      样本数: 8139, 正样本: 5503, 负样本: 2636
+      xgboost: AUC=0.9984, Accuracy=0.9779
+      Top 10 特征:
+        deck_Offering: 0.0251
+        relic_Strawberry: 0.0167
+        deck_Berserk: 0.0166
+        upgrade_Fiend Fire: 0.0159
+        relic_White Beast Statue: 0.0152
+        upgrade_Hemokinesis: 0.0140
+        relic_Busted Crown: 0.0134
+        deck_Iron Wave: 0.0126
+        relic_StrikeDummy: 0.0122
+        upgrade_Immolate: 0.0115
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+      warnings.warn(
+      lightgbm: AUC=0.9986, Accuracy=0.9792
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\shop_xgboost.pkl
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\shop_lightgbm.pkl
+    
+    训练完成！模型已保存到 F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models
+
+  [2026-06-15 14:02:52] ironclad V1 完成 ✓
+
+------------------------------------------------------------------
+  步骤: V2
+------------------------------------------------------------------
+
+  [2026-06-15 14:02:52] 开始 ironclad V2
+  命令: python -u -m ironclad_advisor.ml_advisor_v2 train
+
+    加载数据库...
+    构建词表...
+      卡牌词表: 412 张
+      遗物词表: 137 个
+    
+    === 训练卡牌 V2 模型 ===
+      构造排序数据...
+      排序数据: 1014931 行, 250260 组, 权重范围: [0.18, 1.20]
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+      LambdaMART card: 平均 NDCG=0.8163
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\card_lambdamart.pkl
+      构造选择数据...
+      选择数据: 1014931 行, 正样本: 250260
+      LogReg card: 训练集 Accuracy=0.7806
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\card_logreg.pkl
+      计算 CWR 统计...
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\card_cwr.pkl
+    
+    === 训练 Boss 遗物 V2 模型 ===
+      排序数据: 48363 行, 16121 组, 权重范围: [0.18, 1.20]
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+      LambdaMART boss_relic: 平均 NDCG=0.8429
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\boss_relic_lambdamart.pkl
+      选择数据: 48363 行, 正样本: 16121
+      LogReg boss_relic: 训练集 Accuracy=0.7157
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\boss_relic_logreg.pkl
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\boss_relic_cwr.pkl
+    
+    === 训练篝火 V2 模型 ===
+      排序数据: 161518 行, 80759 组, 权重范围: [0.18, 1.20]
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+      LambdaMART campfire: 平均 NDCG=0.9134
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\campfire_lambdamart.pkl
+      选择数据: 161518 行, 正样本: 73247
+      LogReg campfire: 训练集 Accuracy=0.7503
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\campfire_logreg.pkl
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\campfire_cwr.pkl
+    
+    === 训练商店 V2 模型 ===
+      排序数据: 9551 行, 706 组, 权重范围: [0.60, 1.20]
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+    E:\anaconda3\envs\slay_spire\lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRanker was fitted with feature names
+      warnings.warn(
+      LambdaMART shop: 平均 NDCG=1.0000
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\shop_lambdamart.pkl
+      选择数据: 9551 行, 正样本: 371
+      LogReg shop: 训练集 Accuracy=0.9996
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\shop_logreg.pkl
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\shop_cwr.pkl
+    
+    === 行为对齐评估 ===
+    
+      [卡牌] 全量 (n=250260):
+        Top-1 Accuracy: 0.5829
+        Top-3 Accuracy: 0.9381
+        MRR:            0.7558
+      [卡牌] A20 子集 (n=197125):
+        Top-1 Accuracy: 0.6060
+        Top-3 Accuracy: 0.9482
+        MRR:            0.7713
+    
+      [Boss遗物] 全量 (n=16121):
+        Top-1 Accuracy: 0.6230
+        Top-3 Accuracy: 1.0000
+        MRR:            0.7918
+      [Boss遗物] A20 子集 (n=12649):
+        Top-1 Accuracy: 0.6580
+        Top-3 Accuracy: 1.0000
+        MRR:            0.8128
+    
+      [篝火] 全量 (n=73247):
+        Top-1 Accuracy: 0.7655
+        Top-3 Accuracy: 1.0000
+        MRR:            0.8827
+      [篝火] A20 子集 (n=57386):
+        Top-1 Accuracy: 0.7765
+        Top-3 Accuracy: 1.0000
+        MRR:            0.8882
+    
+      [商店] 全量 (n=366):
+        Top-1 Accuracy: 0.9863
+        Top-3 Accuracy: 1.0000
+        MRR:            0.9932
+      [商店] A20 子集 (n=366):
+        Top-1 Accuracy: 0.9863
+        Top-3 Accuracy: 1.0000
+        MRR:            0.9932
+    
+    V2 训练完成！
+
+  [2026-06-15 14:12:17] ironclad V2 完成 ✓
+
+------------------------------------------------------------------
+  步骤: V3
+------------------------------------------------------------------
+
+  [2026-06-15 14:12:17] 开始 ironclad V3
+  命令: python -u -m ironclad_advisor.ml_advisor_v3 train
+
+    加载数据库...
+    构建词表...
+      卡牌词表: 412 张
+      遗物词表: 137 个
+    
+    === 训练卡牌 V3 Transformer ===
+      [14:12:25] 构建卡牌排序数据...
+      [14:13:24] 排序数据: 1014931 行, 250260 组
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer card: 训练=200208, 验证集=50052 个决策, 特征维度=1464, d_model=256, n_heads=8, n_layers=3, 权重范围: [0.18, 1.20]
+        Epoch  1/60  loss=0.4880  val_ndcg=0.7968 ★  lr=0.000180
+        Epoch  5/60  loss=0.3420  val_ndcg=0.8299 ★  lr=0.000500
+        Epoch 10/60  loss=0.3210  val_ndcg=0.8347 ★  lr=0.000490
+        Epoch 15/60  loss=0.3125  val_ndcg=0.8358 ★  lr=0.000461
+        Epoch 20/60  loss=0.3047  val_ndcg=0.8352  lr=0.000415
+        Epoch 25/60  loss=0.2966  val_ndcg=0.8348  lr=0.000355
+        Epoch 30/60  loss=0.2865  val_ndcg=0.8321  lr=0.000288
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.8358)
+      Transformer card 训练完成，已恢复最佳模型 (val_ndcg=0.8358)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\card_transformer_v3.pt
+    
+    === 训练 Boss 遗物 V3 Transformer ===
+      [14:24:45] 构建 Boss 遗物排序数据...
+      [14:24:47] 排序数据: 48363 行, 16121 组
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer boss_relic: 训练=12897, 验证集=3224 个决策, 特征维度=1150, d_model=256, n_heads=8, n_layers=3, 权重范围: [0.18, 1.20]
+        Epoch  1/60  loss=0.6127  val_ndcg=0.8276 ★  lr=0.000180
+        Epoch  5/60  loss=0.4510  val_ndcg=0.8362 ★  lr=0.000500
+        Epoch 10/60  loss=0.4227  val_ndcg=0.8367 ★  lr=0.000490
+        Epoch 15/60  loss=0.4066  val_ndcg=0.8366  lr=0.000461
+        Epoch 20/60  loss=0.3988  val_ndcg=0.8364  lr=0.000415
+        Epoch 25/60  loss=0.3883  val_ndcg=0.8433 ★  lr=0.000355
+        Epoch 30/60  loss=0.3764  val_ndcg=0.8413  lr=0.000288
+        Epoch 35/60  loss=0.3648  val_ndcg=0.8392  lr=0.000217
+        Epoch 40/60  loss=0.3498  val_ndcg=0.8390  lr=0.000150
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.8433)
+      Transformer boss_relic 训练完成，已恢复最佳模型 (val_ndcg=0.8433)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\boss_relic_transformer_v3.pt
+    
+    === 训练篝火 V3 Transformer ===
+      [14:25:31] 构建篝火排序数据...
+      [14:25:41] 排序数据: 161518 行, 80759 组
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer campfire: 训练=64608, 验证集=16151 个决策, 特征维度=1007, d_model=256, n_heads=8, n_layers=3, 权重范围: [0.18, 1.20]
+        Epoch  1/60  loss=0.5581  val_ndcg=0.9103 ★  lr=0.000180
+        Epoch  5/60  loss=0.2912  val_ndcg=0.9354 ★  lr=0.000500
+        Epoch 10/60  loss=0.2778  val_ndcg=0.9402 ★  lr=0.000490
+        Epoch 15/60  loss=0.2688  val_ndcg=0.9376  lr=0.000461
+        Epoch 20/60  loss=0.2597  val_ndcg=0.9421 ★  lr=0.000415
+        Epoch 25/60  loss=0.2518  val_ndcg=0.9391  lr=0.000355
+        Epoch 30/60  loss=0.2403  val_ndcg=0.9376  lr=0.000288
+        Epoch 35/60  loss=0.2277  val_ndcg=0.9347  lr=0.000217
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.9421)
+      Transformer campfire 训练完成，已恢复最佳模型 (val_ndcg=0.9421)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\campfire_transformer_v3.pt
+    
+    === 训练商店 V3 Transformer ===
+      [14:27:37] 构建商店排序数据...
+      [14:27:38] 排序数据: 9551 行, 706 组
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer shop: 训练=565, 验证集=141 个决策, 特征维度=1579, d_model=256, n_heads=8, n_layers=3, 权重范围: [0.60, 1.20]
+        Epoch  1/60  loss=0.4811  val_ndcg=0.9338 ★  lr=0.000180
+        Epoch  5/60  loss=0.1061  val_ndcg=0.9531 ★  lr=0.000500
+        Epoch 10/60  loss=0.0963  val_ndcg=0.9564 ★  lr=0.000490
+        Epoch 15/60  loss=0.0910  val_ndcg=0.9628 ★  lr=0.000461
+        Epoch 20/60  loss=0.0867  val_ndcg=0.9611  lr=0.000415
+        Epoch 25/60  loss=0.0849  val_ndcg=0.9611  lr=0.000355
+        Epoch 30/60  loss=0.0830  val_ndcg=0.9611  lr=0.000288
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.9628)
+      Transformer shop 训练完成，已恢复最佳模型 (val_ndcg=0.9628)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\shop_transformer_v3.pt
+    
+    V3 训练完成！
+
+  [2026-06-15 14:27:43] ironclad V3 完成 ✓
+
+------------------------------------------------------------------
+  步骤: V4
+------------------------------------------------------------------
+
+  [2026-06-15 14:27:43] 开始 ironclad V4
+  命令: python -u -m ironclad_advisor.ml_advisor_v4 train
+
+    加载数据库...
+    构建词表...
+      卡牌词表: 412 张
+      遗物词表: 137 个
+    
+    === 训练卡牌 V4 Transformer (A20 胜局) ===
+      A20 胜局决策数: 80944
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer card_v4: 训练=64756, 验证集=16188 个决策, 特征维度=1464, d_model=256, n_heads=8, n_layers=3
+        Epoch  1/60  loss=0.6446  val_ndcg=0.8286 ★  lr=0.000180
+        Epoch  5/60  loss=0.3761  val_ndcg=0.8559 ★  lr=0.000500
+        Epoch 10/60  loss=0.3504  val_ndcg=0.8632 ★  lr=0.000490
+        Epoch 15/60  loss=0.3345  val_ndcg=0.8649 ★  lr=0.000461
+        Epoch 20/60  loss=0.3252  val_ndcg=0.8701 ★  lr=0.000415
+        Epoch 25/60  loss=0.3153  val_ndcg=0.8708 ★  lr=0.000355
+        Epoch 30/60  loss=0.3044  val_ndcg=0.8720 ★  lr=0.000288
+        Epoch 35/60  loss=0.2917  val_ndcg=0.8721 ★  lr=0.000217
+        Epoch 40/60  loss=0.2794  val_ndcg=0.8699  lr=0.000150
+        Epoch 45/60  loss=0.2649  val_ndcg=0.8687  lr=0.000090
+        Epoch 50/60  loss=0.2542  val_ndcg=0.8676  lr=0.000044
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.8721)
+      Transformer card_v4 训练完成，已恢复最佳模型 (val_ndcg=0.8721)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\card_transformer_v4.pt
+    
+    === 训练 Boss 遗物 V4 Transformer (A20 胜局) ===
+      A20 胜局决策数: 5393
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer boss_relic_v4: 训练=4315, 验证集=1078 个决策, 特征维度=1150, d_model=256, n_heads=8, n_layers=3
+        Epoch  1/60  loss=0.7124  val_ndcg=0.8495 ★  lr=0.000180
+        Epoch  5/60  loss=0.6107  val_ndcg=0.8647 ★  lr=0.000500
+        Epoch 10/60  loss=0.4531  val_ndcg=0.8666 ★  lr=0.000490
+        Epoch 15/60  loss=0.4390  val_ndcg=0.8686 ★  lr=0.000461
+        Epoch 20/60  loss=0.4205  val_ndcg=0.8719 ★  lr=0.000415
+        Epoch 25/60  loss=0.4080  val_ndcg=0.8703  lr=0.000355
+        Epoch 30/60  loss=0.3948  val_ndcg=0.8723 ★  lr=0.000288
+        Epoch 35/60  loss=0.3835  val_ndcg=0.8716  lr=0.000217
+        Epoch 40/60  loss=0.3709  val_ndcg=0.8608  lr=0.000150
+        Epoch 45/60  loss=0.3590  val_ndcg=0.8585  lr=0.000090
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.8723)
+      Transformer boss_relic_v4 训练完成，已恢复最佳模型 (val_ndcg=0.8723)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\boss_relic_transformer_v4.pt
+    
+    === 训练篝火 V4 Transformer (A20 胜局) ===
+      A20 胜局决策数: 25646
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer campfire_v4: 训练=20517, 验证集=5129 个决策, 特征维度=1007, d_model=256, n_heads=8, n_layers=3
+        Epoch  1/60  loss=0.6959  val_ndcg=0.9314 ★  lr=0.000180
+        Epoch  5/60  loss=0.3638  val_ndcg=0.9417 ★  lr=0.000500
+        Epoch 10/60  loss=0.3084  val_ndcg=0.9417  lr=0.000490
+        Epoch 15/60  loss=0.2904  val_ndcg=0.9461 ★  lr=0.000461
+        Epoch 20/60  loss=0.2772  val_ndcg=0.9457  lr=0.000415
+        Epoch 25/60  loss=0.2574  val_ndcg=0.9409  lr=0.000355
+        Epoch 30/60  loss=0.2330  val_ndcg=0.9413  lr=0.000288
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.9461)
+      Transformer campfire_v4 训练完成，已恢复最佳模型 (val_ndcg=0.9461)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\campfire_transformer_v4.pt
+    
+    === 训练商店 V4 Transformer (A20 胜局) ===
+      A20 胜局决策数: 478
+      使用设备: NVIDIA GeForce RTX 4090 (CUDA)
+      Transformer shop_v4: 训练=383, 验证集=95 个决策, 特征维度=1579, d_model=256, n_heads=8, n_layers=3
+        Epoch  1/60  loss=0.6032  val_ndcg=0.9122 ★  lr=0.000180
+        Epoch  5/60  loss=0.0888  val_ndcg=0.9204 ★  lr=0.000500
+        Epoch 10/60  loss=0.0718  val_ndcg=0.9417 ★  lr=0.000490
+        Epoch 15/60  loss=0.0742  val_ndcg=0.9567 ★  lr=0.000461
+        Epoch 20/60  loss=0.0688  val_ndcg=0.9582 ★  lr=0.000415
+        Epoch 25/60  loss=0.0650  val_ndcg=0.9582  lr=0.000355
+        Epoch 30/60  loss=0.0616  val_ndcg=0.9582  lr=0.000288
+        Epoch 35/60  loss=0.0670  val_ndcg=0.9582  lr=0.000217
+      早停: 15 epoch 无提升，停止训练 (最佳 val_ndcg=0.9582)
+      Transformer shop_v4 训练完成，已恢复最佳模型 (val_ndcg=0.9582)
+      已保存: F:\AI_Learn\slay_of_spire\STS1\ironclad_advisor\models\shop_transformer_v4.pt
+    
+    V4 训练完成！
+
+  [2026-06-15 14:33:13] ironclad V4 完成 ✓
+
+==================================================================
+  训练结果汇总
+==================================================================
+  角色            DB      V1      V2      V3      V4    
+  ----------------------------------------------------
+  ironclad      ✓     ✓     ✓     ✓     ✓   
+
+  总计: 5 步，5 成功，0 失败
+  日志已保存至: F:\AI_Learn\slay_of_spire\STS1\logs\train_20260615_140122.log
