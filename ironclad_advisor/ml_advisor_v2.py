@@ -132,18 +132,19 @@ def _card_type(name: str) -> str:
 # 机制关键词分组
 # ---------------------------------------------------------------------------
 
-_STRENGTH_GENERATORS = {"Inflame", "Spot Weakness", "Demon Form", "Limit Break", "Rupture"}
+_STRENGTH_GENERATORS = {"Inflame", "Spot Weakness", "Demon Form", "Limit Break"}
 _STRENGTH_SCALERS = {"Heavy Blade", "Pummel", "Sword Boomerang", "Reaper", "Whirlwind"}
 _EXHAUST_PRODUCERS = {"Fiend Fire", "Sever Soul", "Burning Pact", "Second Wind", "True Grit", "Sentinel", "Offering"}
-_EXHAUST_SYNERGY = {"Dark Embrace", "Feel No Pain", "Corruption", "Sentinel"}
+_EXHAUST_SYNERGY = {"Dark Embrace", "Feel No Pain", "Sentinel"}  # Corruption 是引擎牌，不在此处
 _BLOCK_GENERATORS = {"Shrug It Off", "Impervious", "Flame Barrier", "Ghostly Armor", "Iron Wave", "Power Through", "Defend_R"}
 _BLOCK_SCALERS = {"Barricade", "Entrench", "Body Slam", "Juggernaut", "Metallicize"}
-_DRAW_ENGINES = {"Battle Trance", "Offering", "Pommel Strike", "Burning Pact", "Shrug It Off", "Evolve"}
+_DRAW_ENGINES = {"Battle Trance", "Offering", "Pommel Strike", "Burning Pact", "Shrug It Off", "Evolve", "Dropkick"}
 _VULNERABLE_APPLIERS = {"Bash", "Uppercut", "Thunderclap", "Shockwave", "Clothesline"}
 _MULTI_HIT = {"Pummel", "Sword Boomerang", "Twin Strike", "Whirlwind"}
 _ENERGY_GENERATORS = {"Offering", "Seeing Red", "Berserk", "Bloodletting"}
 _SELF_DAMAGE = {"Hemokinesis", "Offering", "Brutality", "Combust", "Bloodletting"}
 _STATUS_PRODUCERS = {"Wild Strike", "Power Through", "Reckless Charge", "Immolate"}
+_LOOP_CORE = {"Dropkick", "Pommel Strike"}  # 无限循环的核心牌对
 
 # Synergy 对：(enabler_set, payoff_set, name)
 _SYNERGY_PAIRS = [
@@ -158,15 +159,20 @@ _SYNERGY_PAIRS = [
     (_VULNERABLE_APPLIERS, _MULTI_HIT, "vulnerable_multi"),
     (_ENERGY_GENERATORS, {"Whirlwind", "Bludgeon", "Demon Form", "Barricade"}, "energy_payoff"),
     ({"Rupture"}, _SELF_DAMAGE, "rupture_self_damage"),
+    # Loop 相关
+    ({"Pommel Strike"}, {"Dropkick"}, "loop_pair"),        # Pommel+Dropkick 核心组合
+    (_VULNERABLE_APPLIERS, {"Dropkick"}, "dropkick_vuln"), # Dropkick 需要易伤触发
+    ({"Rage"}, _LOOP_CORE | _MULTI_HIT, "rage_loop"),      # Rage 在 loop/多段攻击中生成无限格挡
 ]
 
-# Archetype 定义
+# Archetype 定义（用于 deck_archetype_features，与 _ARCHETYPE_CORE 保持一致）
 _ARCHETYPES = {
-    "strength": _STRENGTH_GENERATORS | _STRENGTH_SCALERS,
-    "block": _BLOCK_GENERATORS | _BLOCK_SCALERS,
-    "exhaust": _EXHAUST_PRODUCERS | _EXHAUST_SYNERGY,
-    "status_synergy": {"Evolve", "Fire Breathing"} | _STATUS_PRODUCERS,
-    "thin_deck": set(),  # 通过 deck_size <= 15 判定
+    "strength":  _STRENGTH_GENERATORS | _STRENGTH_SCALERS,
+    "barricade": {"Barricade", "Body Slam", "Entrench", "Juggernaut",
+                  "Impervious", "Ghostly Armor", "Flame Barrier"},
+    "exhaust":   _EXHAUST_PRODUCERS | {"Corruption", "Dark Embrace", "Feel No Pain"},
+    "rupture":   {"Rupture"} | _SELF_DAMAGE,
+    "thin_deck": {"Clash", "Dropkick", "Pommel Strike", "Anger", "Perfected Strike"},
 }
 
 # 关键词组列表（用于 deck_keyword_features）
@@ -201,7 +207,22 @@ def deck_archetype_features(deck: list[str]) -> np.ndarray:
     scores = []
     for name, card_set in _ARCHETYPES.items():
         if name == "thin_deck":
-            scores.append(1.0 if total <= 15 else 0.0)
+            card_count = sum(1 for c in deck if c.split("+")[0].strip() in card_set)
+            # 消耗牌打出后离开循环，等效循环规模 = total - 消耗牌数
+            # Corruption 在场时所有技能牌消耗，进一步压缩循环规模
+            deck_bases_list = [c.split("+")[0].strip() for c in deck]
+            has_corruption = "Corruption" in deck_bases_list
+            if has_corruption:
+                # 所有技能牌 + 攻击类自消耗牌（Fiend Fire, Sever Soul）
+                n_exhaust = sum(
+                    1 for b in deck_bases_list
+                    if b in _SKILL_CARDS or b in {"Fiend Fire", "Sever Soul"}
+                )
+            else:
+                n_exhaust = sum(1 for b in deck_bases_list if b in _EXHAUST_PRODUCERS)
+            effective_size = max(total - n_exhaust, 1)
+            size_score = 1.0 if effective_size <= 15 else max(0.0, 1.0 - (effective_size - 15) / 10.0)
+            scores.append(max(card_count / max(total, 1), size_score))
         else:
             count = sum(1 for c in deck if c.split("+")[0].strip() in card_set)
             scores.append(count / total)
@@ -209,7 +230,7 @@ def deck_archetype_features(deck: list[str]) -> np.ndarray:
 
 
 def card_synergy_features(card: str, deck: list[str]) -> np.ndarray:
-    """计算候选卡对各 synergy pair 的贡献（11 维）。"""
+    """计算候选卡对各 synergy pair 的贡献（14 维）。"""
     base = card.split("+")[0].strip()
     deck_bases = set(c.split("+")[0].strip() for c in deck)
     scores = np.zeros(len(_SYNERGY_PAIRS), dtype=np.float32)
@@ -219,6 +240,23 @@ def card_synergy_features(card: str, deck: list[str]) -> np.ndarray:
         elif base in enablers and deck_bases & payoffs:
             scores[i] = 1.0
     return scores
+
+
+# ---------------------------------------------------------------------------
+# 全局常量：能量遗物 / 状态牌 / 诅咒牌（各角色通用）
+# ---------------------------------------------------------------------------
+
+_ENERGY_RELICS = {
+    "Cursed Key", "Sozu", "Velvet Choker", "Fusion Hammer",
+    "Philosopher's Stone", "Ectoplasm", "Coffee Dripper",
+    "Mark of Pain", "Runic Dome",
+}
+_STATUS_CARDS = {"Wound", "Slimed", "Dazed", "Burn", "Void"}
+_CURSE_CARDS = {
+    "Curse of the Bell", "Regret", "Pain", "Shame", "Normality",
+    "Pride", "Writhe", "Parasite", "Clumsy", "Doubt", "Decay",
+    "Injury", "Necronomicurse",
+}
 
 
 def _deck_type_ratios(deck: list[str]) -> np.ndarray:
@@ -234,12 +272,46 @@ def _deck_type_ratios(deck: list[str]) -> np.ndarray:
     ], dtype=np.float32)
 
 
-def deck_analysis_features(deck: list[str]) -> np.ndarray:
-    """返回 [攻击占比, 技能占比, 能力占比, 关键词计数x12, 流派得分x5]，共 20 维。"""
-    type_feats = _deck_type_ratios(deck)       # 3 维
-    keyword_feats = deck_keyword_features(deck)  # 12 维
-    archetype_feats = deck_archetype_features(deck)  # 5 维
-    return np.concatenate([type_feats, keyword_feats, archetype_feats])
+# ---------------------------------------------------------------------------
+# 维度常量 — 改动任何特征函数时必须同步更新，否则下方 assert 会立刻报错
+# ---------------------------------------------------------------------------
+_DA_FEATS_DIM      = 23   # deck_analysis_features: 3+12+5+3
+_ARCH_FEATS_DIM    = 13   # archetype_completion_features: 4+1+1+4+1+1+1
+_TEMPO_DIM         = 8    # temporal_features
+_BOSS_CTX_DIM      = 6    # boss_context_features
+_REMOVE_CTX_DIM    = 3    # shop_remove_context
+_REMOVE_FEATS_DIM  = 2    # [is_remove, is_skip]
+_UPGRADE_FEATS_DIM = 3    # upgrade_context_features: [is_upgraded, unupgraded_ratio, is_power]
+
+
+def deck_analysis_features(deck: list[str], relics: list[str] | None = None) -> np.ndarray:
+    """返回卡组+遗物上下文特征，共 _DA_FEATS_DIM=23 维。
+      type_ratios      [3]  攻击/技能/能力占比
+      keyword_counts   [12] 各机制关键词计数
+      archetype_scores [5]  各流派完成度
+      energy_relics    [1]  加费遗物数量
+      status_count     [1]  状态牌数量（伤口/粘液等）
+      curse_count      [1]  诅咒牌数量
+    """
+    type_feats = _deck_type_ratios(deck)
+    keyword_feats = deck_keyword_features(deck)
+    archetype_feats = deck_archetype_features(deck)
+
+    relics = relics or []
+    deck_bases = [c.split("+")[0].strip() for c in deck]
+    energy_count = float(sum(1 for r in relics if r.strip() in _ENERGY_RELICS))
+    status_count = float(sum(1 for b in deck_bases if b in _STATUS_CARDS))
+    curse_count  = float(sum(1 for b in deck_bases if b in _CURSE_CARDS))
+
+    result = np.concatenate([
+        type_feats, keyword_feats, archetype_feats,
+        [energy_count, status_count, curse_count],
+    ])
+    assert len(result) == _DA_FEATS_DIM, (
+        f"deck_analysis_features 维度错误: {len(result)} != {_DA_FEATS_DIM}。"
+        f"请检查 _KEYWORD_GROUPS({len(keyword_feats)}) / _ARCHETYPES({len(archetype_feats)}) 是否变动。"
+    )
+    return result
 
 
 def card_count_in_deck(card: str, deck: list[str]) -> float:
@@ -253,16 +325,36 @@ def card_count_in_deck(card: str, deck: list[str]) -> float:
 # ---------------------------------------------------------------------------
 
 # (relic_name, card_set, description)
+# 手里剑/苦无：一回合打出 3 张攻击即触发。关键 Enabler 是高频/低费攻击牌：
+# - Clash(0费，全攻击手必出)、Dropkick(易伤时0费)、Pommel Strike(可抽牌拉链条)
+# - _MULTI_HIT 本身（Sword Boomerang/Pummel 各自算多张）
+# - 现有 Anger / Twin Strike 保留
+_SHURIKEN_KUNAI_ENABLERS = _MULTI_HIT | {
+    "Twin Strike", "Anger",
+    "Pommel Strike",          # 无限流核心，高频打出攻击
+    "Clash",                  # 0 费，全攻击手时必打
+    "Dropkick",               # 易伤时 0 费，循环引擎
+}
+
+# Snecko Eye：受益最大的是高费（2-3费）可反复打出的牌 + X费牌（随机费不影响X倍伤）
+# 移除能力牌（Demon Form/Barricade 只打一次，不是每轮循环受益的对象）
+_SNECKO_TARGETS = {
+    "Bludgeon", "Carnage", "Immolate", "Feed", "Reaper",  # 3费重拳
+    "Fiend Fire", "Whirlwind",                             # X费牌：蛇眼随机到低费时输出极高
+    "Impervious",                                          # 2费高防御，反复打出
+    "Heavy Blade", "Sever Soul", "Uppercut",               # 2费强力攻击
+}
+
 _RELIC_CARD_SYNERGIES = [
     ("Dead Branch", _EXHAUST_PRODUCERS | {"Corruption", "Fiend Fire", "Second Wind", "True Grit", "Sentinel", "Offering"}, "dead_branch_exhaust"),
-    ("Snecko Eye", {"Bludgeon", "Carnage", "Demon Form", "Barricade", "Impervious", "Feed", "Fiend Fire", "Immolate", "Reaper"}, "snecko_high_cost"),
+    ("Snecko Eye",   _SNECKO_TARGETS,                           "snecko_high_cost"),
     ("Necronomicon", {"Carnage", "Bludgeon", "Hemokinesis", "Pummel", "Searing Blow", "Immolate", "Reaper"}, "necronomicon_2cost_atk"),
-    ("Mark of Pain", _ATTACK_CARDS, "mark_pain_attacks"),
-    ("Paper Phrog", _VULNERABLE_APPLIERS, "paper_phrog_vuln"),
-    ("Pen Nib", {"Bludgeon", "Heavy Blade", "Carnage", "Hemokinesis", "Reaper"}, "pen_nib_high_dmg"),
-    ("Shuriken", _MULTI_HIT | {"Twin Strike", "Anger"}, "shuriken_multi_atk"),
-    ("Kunai", _MULTI_HIT | {"Twin Strike", "Anger"}, "kunai_multi_atk"),
-    ("Ornamental Fan", _ATTACK_CARDS, "ornamental_fan_attacks"),
+    ("Mark of Pain", _ATTACK_CARDS,                             "mark_pain_attacks"),
+    ("Paper Phrog",  _VULNERABLE_APPLIERS,                      "paper_phrog_vuln"),
+    ("Pen Nib",      {"Bludgeon", "Heavy Blade", "Carnage", "Hemokinesis", "Reaper"}, "pen_nib_high_dmg"),
+    ("Shuriken",     _SHURIKEN_KUNAI_ENABLERS,                  "shuriken_multi_atk"),
+    ("Kunai",        _SHURIKEN_KUNAI_ENABLERS,                  "kunai_multi_atk"),
+    ("Ornamental Fan", _ATTACK_CARDS,                           "ornamental_fan_attacks"),
 ]
 
 
@@ -270,20 +362,22 @@ def relic_card_synergy_features(card: str, deck: list[str],
                                 relics: list[str]) -> np.ndarray:
     """计算候选卡与当前遗物的协同特征（9 维）。"""
     base = card.split("+")[0].strip()
-    relic_set = set(relics)
+    # 大小写不敏感 + strip，防止日志解析带来的空格/大小写差异
+    relic_set = {r.strip().lower() for r in relics}
     scores = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
     for i, (relic_name, card_set, _) in enumerate(_RELIC_CARD_SYNERGIES):
-        if relic_name in relic_set and base in card_set:
+        if relic_name.lower() in relic_set and base in card_set:
             scores[i] = 1.0
     return scores
 
 
 def relic_deck_synergy_features(relic: str, deck: list[str]) -> np.ndarray:
     """反向协同：候选遗物与卡组中卡牌的协同计数（9 维）。"""
+    relic_norm = relic.strip().lower()
     deck_bases = [c.split("+")[0].strip() for c in deck]
     scores = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
     for i, (relic_name, card_set, _) in enumerate(_RELIC_CARD_SYNERGIES):
-        if relic == relic_name:
+        if relic_norm == relic_name.lower():
             scores[i] = float(sum(1 for b in deck_bases if b in card_set))
     return scores
 
@@ -293,15 +387,19 @@ def relic_deck_synergy_features(relic: str, deck: list[str]) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 # 铁甲战士四大核心流派成员卡
+# 各流派无重叠，保持信号纯净：
+# - barricade: 格挡转伤害引擎 (Barricade 核心)
+# - corruption: Corruption 引擎流 (独立于通用消耗)
+# - strength:  力量叠加流 (Demon Form 核心，Rupture 独立为 rupture 流)
+# - exhaust:   通用消耗流 (无需 Corruption 也能运转)
 _ARCHETYPE_CORE = {
-    "barricade":  {"Barricade", "Body Slam", "Entrench", "Impervious",
-                   "Ghostly Armor", "Flame Barrier", "Power Through", "Shrug It Off"},
-    "corruption": {"Corruption", "Feel No Pain", "Dark Embrace", "Sentinel",
-                   "Second Wind", "Sever Soul"},
-    "strength":   {"Demon Form", "Inflame", "Spot Weakness", "Limit Break", "Rupture",
+    "barricade":  {"Barricade", "Body Slam", "Entrench", "Juggernaut",
+                   "Impervious", "Ghostly Armor", "Flame Barrier"},
+    "corruption": {"Corruption", "Feel No Pain", "Dark Embrace"},
+    "strength":   {"Demon Form", "Inflame", "Spot Weakness", "Limit Break",
                    "Heavy Blade", "Reaper", "Whirlwind"},
     "exhaust":    {"Fiend Fire", "Burning Pact", "True Grit", "Second Wind",
-                   "Dark Embrace", "Feel No Pain", "Sentinel"},
+                   "Sentinel", "Sever Soul"},
 }
 _ARCHETYPE_NAMES = sorted(_ARCHETYPE_CORE.keys())   # 固定顺序: barricade, corruption, exhaust, strength
 
@@ -309,7 +407,7 @@ _ARCHETYPE_NAMES = sorted(_ARCHETYPE_CORE.keys())   # 固定顺序: barricade, c
 _KEY_ENGINES = sorted(["Barricade", "Corruption", "Demon Form", "Fiend Fire"])
 
 # 抽牌引擎牌 vs 抽牌收益牌（用于 draw-payoff 特征）
-_DRAW_ENGINES_ARCH = {"Battle Trance", "Offering", "Pommel Strike", "Burning Pact"}
+_DRAW_ENGINES_ARCH = {"Battle Trance", "Offering", "Pommel Strike", "Burning Pact", "Dropkick"}
 _DRAW_PAYOFFS = {"Whirlwind", "Limit Break", "Fiend Fire", "Bludgeon"}
 
 
@@ -398,18 +496,55 @@ def boss_context_features(act: int, act1_boss: str = "", act2_boss: str = "") ->
     return feat
 
 
-def _card_feature_row(base, da_feats, tempo, extra, synergy, relic_card_syn,
+def _card_feature_row(base, da_feats, tempo, upgrade_feats, extra, synergy, relic_card_syn,
                       archetype_feats, boss_feats, option_vec) -> np.ndarray:
     """Card feature vector layout — single source of truth.
     All training and inference paths must call this function so feature
     order stays consistent automatically."""
-    return np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn,
+    assert len(da_feats)        == _DA_FEATS_DIM,              f"da_feats: {len(da_feats)} != {_DA_FEATS_DIM}"
+    assert len(tempo)           == _TEMPO_DIM,                  f"tempo: {len(tempo)} != {_TEMPO_DIM}"
+    assert len(upgrade_feats)   == _UPGRADE_FEATS_DIM,          f"upgrade_feats: {len(upgrade_feats)} != {_UPGRADE_FEATS_DIM}"
+    assert len(extra)           == 5,                           f"card extra: {len(extra)} != 5"
+    assert len(synergy)         == len(_SYNERGY_PAIRS),         f"synergy: {len(synergy)} != {len(_SYNERGY_PAIRS)}"
+    assert len(relic_card_syn)  == len(_RELIC_CARD_SYNERGIES),  f"relic_card_syn: {len(relic_card_syn)} != {len(_RELIC_CARD_SYNERGIES)}"
+    assert len(archetype_feats) == _ARCH_FEATS_DIM,             f"archetype_feats: {len(archetype_feats)} != {_ARCH_FEATS_DIM}"
+    assert len(boss_feats)      == _BOSS_CTX_DIM,               f"boss_feats: {len(boss_feats)} != {_BOSS_CTX_DIM}"
+    return np.concatenate([base, da_feats, tempo, upgrade_feats, extra, synergy, relic_card_syn,
                            archetype_feats, boss_feats, option_vec])
 
 
 # ---------------------------------------------------------------------------
 # 模型 A: LambdaMART 排序模型 - 数据构造
 # ---------------------------------------------------------------------------
+
+def upgrade_context_features(card: str, deck: list[str], floor: int) -> np.ndarray:
+    """升级上下文特征（3维）。
+
+    - is_upgraded           : 候选牌本身是否已升级（有"+"）
+    - unupgraded_ratio      : 牌组中非基础牌里未升级的比例
+                              越高表示升级资源已被占用，新牌升级机会越低
+    - is_power_card         : 候选牌是否是能力牌
+                              能力牌整场只打一次，未升级的差距相对较小
+
+    模型通过将本列与 tempo 中的 floor_pct / floors_to_boss 联合，
+    自动学习"高层+高比例未升级 → 不升级牌价值折扣"，
+    同时通过协同信号（loop_pair 等）保持循环核心牌的高权重。
+    """
+    is_upgraded = 1.0 if "+" in card else 0.0
+    base = card.split("+")[0].strip()
+
+    # 非基础牌中未升级比例
+    non_basics = [c for c in deck if c.split("+")[0].strip() not in _BASIC_CARDS]
+    if non_basics:
+        n_unupgraded = sum(1 for c in non_basics if "+" not in c)
+        unupgraded_ratio = n_unupgraded / len(non_basics)
+    else:
+        unupgraded_ratio = 0.0
+
+    is_power = 1.0 if base in _POWER_CARDS else 0.0
+
+    return np.array([is_upgraded, unupgraded_ratio, is_power], dtype=np.float32)
+
 
 def temporal_features(floor: int, act: int, hp_pct: float) -> np.ndarray:
     """游戏进程时序特征 (8维)。
@@ -479,7 +614,7 @@ def build_card_ranking_data(db: dict, vocab: dict):
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
         is_boss = 1.0 if d.get("is_boss_reward", False) else 0.0
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics"])
         tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
 
         boss_feats = boss_context_features(d["act"], d.get("act1_boss", ""), d.get("act2_boss", ""))
@@ -498,10 +633,11 @@ def build_card_ranking_data(db: dict, vocab: dict):
 
             extra = np.array([is_boss, is_skip, pick_rate, win_rate_in_deck,
                               count_in_deck], dtype=np.float32)
+            upgrade_feats = upgrade_context_features(option, d["deck"], d["floor"])
             synergy = card_synergy_features(option, d["deck"])
             relic_card_syn = relic_card_synergy_features(option, d["deck"], d["relics"])
             archetype_feats = archetype_completion_features(option, d["deck"])
-            row = _card_feature_row(base, da_feats, tempo, extra, synergy, relic_card_syn,
+            row = _card_feature_row(base, da_feats, tempo, upgrade_feats, extra, synergy, relic_card_syn,
                                     archetype_feats, boss_feats, option_vec)
             rows.append(row)
 
@@ -537,7 +673,7 @@ def build_boss_relic_ranking_data(db: dict, vocab: dict):
             len(d["relics_before"]), d["deck"], d["relics_before"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics_before"])
         tempo = temporal_features(boss_floor, act, d["hp_pct"])
         group_size = 0
 
@@ -577,7 +713,7 @@ def build_campfire_ranking_data(db: dict, vocab: dict):
             len(d["relics"]), d["deck"], d["relics"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics"])
         tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
 
         hp_below_30 = 1.0 if d["hp_pct"] < 30 else 0.0
@@ -618,7 +754,7 @@ def build_shop_ranking_data(db: dict, vocab: dict):
             len(d["relics"]), d["deck"], d["relics"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics"])
         tempo = temporal_features(d["floor"], d.get("act", 1), d["hp_pct"])
         gold = d.get("gold", 0)
         purchased_set = set(d.get("purchased", []))
@@ -669,7 +805,8 @@ def build_shop_ranking_data(db: dict, vocab: dict):
                 is_remove = 0.0
                 was_picked = item in purchased_set
 
-            remove_feats = np.array([is_remove], dtype=np.float32)
+            is_skip_flag = 1.0 if item == "不购买" else 0.0
+            remove_feats = np.array([is_remove, is_skip_flag], dtype=np.float32)
             rcs = relic_card_synergy_features(item, d["deck"], d["relics"])
             rds = relic_deck_synergy_features(item, d["deck"])
             row = np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec])
@@ -709,7 +846,7 @@ def build_card_choice_data(db: dict, vocab: dict):
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
         is_boss = 1.0 if d.get("is_boss_reward", False) else 0.0
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics"])
         tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
         boss_feats = boss_context_features(d["act"], d.get("act1_boss", ""), d.get("act2_boss", ""))
 
@@ -726,10 +863,11 @@ def build_card_choice_data(db: dict, vocab: dict):
 
             extra = np.array([is_boss, is_skip, pick_rate, win_rate_in_deck,
                               count_in_deck], dtype=np.float32)
+            upgrade_feats = upgrade_context_features(option, d["deck"], d["floor"])
             synergy = card_synergy_features(option, d["deck"])
             relic_card_syn = relic_card_synergy_features(option, d["deck"], d["relics"])
             archetype_feats = archetype_completion_features(option, d["deck"])
-            row = _card_feature_row(base, da_feats, tempo, extra, synergy, relic_card_syn,
+            row = _card_feature_row(base, da_feats, tempo, upgrade_feats, extra, synergy, relic_card_syn,
                                     archetype_feats, boss_feats, option_vec)
             rows.append(row)
             labels.append(1 if option == d["picked"] else 0)
@@ -755,7 +893,7 @@ def build_boss_relic_choice_data(db: dict, vocab: dict):
             len(d["relics_before"]), d["deck"], d["relics_before"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics_before"])
         tempo = temporal_features(boss_floor, act, d["hp_pct"])
 
         for option in offered:
@@ -785,7 +923,7 @@ def build_campfire_choice_data(db: dict, vocab: dict):
             len(d["relics"]), d["deck"], d["relics"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics"])
         tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
 
         hp_below_30 = 1.0 if d["hp_pct"] < 30 else 0.0
@@ -816,7 +954,7 @@ def build_shop_choice_data(db: dict, vocab: dict):
             len(d["relics"]), d["deck"], d["relics"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics"])
         tempo = temporal_features(d["floor"], d.get("act", 1), d["hp_pct"])
         gold = d.get("gold", 0)
         purchased_set = set(d.get("purchased", []))
@@ -864,7 +1002,8 @@ def build_shop_choice_data(db: dict, vocab: dict):
                 is_remove = 0.0
                 was_picked = item in purchased_set
 
-            remove_feats = np.array([is_remove], dtype=np.float32)
+            is_skip_flag = 1.0 if item == "不购买" else 0.0
+            remove_feats = np.array([is_remove, is_skip_flag], dtype=np.float32)
             rcs = relic_card_synergy_features(item, d["deck"], d["relics"])
             rds = relic_deck_synergy_features(item, d["deck"])
             row = np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec])
@@ -1258,7 +1397,7 @@ def card_inference_features_v2(floor: int, act: int, hp_pct: int,
     base = base_features(floor, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
                          num_upgrades, deck_upgrades)
     is_boss = 1.0 if floor in (16, 33) else 0.0
-    da_feats = deck_analysis_features(deck)
+    da_feats = deck_analysis_features(deck, relics)
     tempo = temporal_features(floor, act, hp_pct)
     boss_feats = boss_context_features(act, act1_boss, act2_boss)
     rows = []
@@ -1276,10 +1415,11 @@ def card_inference_features_v2(floor: int, act: int, hp_pct: int,
 
         extra = np.array([is_boss, is_skip, pick_rate, win_rate_in_deck,
                           count_in_deck], dtype=np.float32)
+        upgrade_feats = upgrade_context_features(option, deck, floor)
         synergy = card_synergy_features(option, deck)
         relic_card_syn = relic_card_synergy_features(option, deck, relics)
         archetype_feats = archetype_completion_features(option, deck)
-        rows.append(_card_feature_row(base, da_feats, tempo, extra, synergy, relic_card_syn,
+        rows.append(_card_feature_row(base, da_feats, tempo, upgrade_feats, extra, synergy, relic_card_syn,
                                       archetype_feats, boss_feats, option_vec))
 
     return np.array(rows)
@@ -1295,7 +1435,7 @@ def boss_relic_inference_features_v2(act: int, hp_pct: int,
     boss_floor = {1: 16, 2: 33, 3: 50}.get(act, 16)
     base = base_features(boss_floor, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
                          num_upgrades, deck_upgrades)
-    da_feats = deck_analysis_features(deck)
+    da_feats = deck_analysis_features(deck, relics)
     tempo = temporal_features(boss_floor, act, hp_pct)
     rows = []
 
@@ -1321,7 +1461,7 @@ def campfire_inference_features_v2(floor: int, act: int, hp_pct: int,
                                    deck_upgrades: dict | None = None) -> np.ndarray:
     base = base_features(floor, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
                          num_upgrades, deck_upgrades)
-    da_feats = deck_analysis_features(deck)
+    da_feats = deck_analysis_features(deck, relics)
     tempo = temporal_features(floor, act, hp_pct)
 
     hp_below_30 = 1.0 if hp_pct < 30 else 0.0
@@ -1348,7 +1488,7 @@ def shop_inference_features_v2(floor: int, act: int, hp_pct: int, gold: int,
     relic_to_idx = vocab["relic_to_idx"]
     base = base_features(floor, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
                          num_upgrades, deck_upgrades)
-    da_feats = deck_analysis_features(deck)
+    da_feats = deck_analysis_features(deck, relics)
     tempo = temporal_features(floor, act, hp_pct)
     remove_ctx = shop_remove_context(deck)
     rows = []
@@ -1364,7 +1504,7 @@ def shop_inference_features_v2(floor: int, act: int, hp_pct: int, gold: int,
                          dtype=np.float32)
         rcs = relic_card_synergy_features(item, deck, relics)
         rds = relic_deck_synergy_features(item, deck)
-        remove_feats = np.array([0.0], dtype=np.float32)
+        remove_feats = np.array([0.0, 0.0], dtype=np.float32)  # [is_remove, is_skip]
         rows.append(np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec]))
 
     # REMOVE（移除卡牌）
@@ -1377,7 +1517,7 @@ def shop_inference_features_v2(floor: int, act: int, hp_pct: int, gold: int,
     extra = np.array([gold, buy_wr, skip_wr, float(times_purchased), 1.0], dtype=np.float32)
     rcs = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
     rds = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
-    remove_feats = np.array([1.0], dtype=np.float32)
+    remove_feats = np.array([1.0, 0.0], dtype=np.float32)  # is_remove=1, is_skip=0
     rows.append(np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec]))
 
     # 不购买
@@ -1386,7 +1526,7 @@ def shop_inference_features_v2(floor: int, act: int, hp_pct: int, gold: int,
     extra = np.array([gold, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
     rcs = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
     rds = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
-    remove_feats = np.array([0.0], dtype=np.float32)
+    remove_feats = np.array([0.0, 1.0], dtype=np.float32)  # is_remove=0, is_skip=1
     rows.append(np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec]))
 
     return np.array(rows)

@@ -254,13 +254,48 @@ def _deck_type_ratios(deck: list[str]) -> np.ndarray:
     ], dtype=np.float32)
 
 
-def deck_analysis_features(deck: list[str]) -> np.ndarray:
-    """[攻击占比, 技能占比, 能力占比, 关键词x12, 流派x5]，共 20 维。"""
-    return np.concatenate([
-        _deck_type_ratios(deck),        # 3
-        deck_keyword_features(deck),    # 12
-        deck_archetype_features(deck),  # 5
+_ENERGY_RELICS = {
+    "Cursed Key", "Sozu", "Velvet Choker", "Fusion Hammer",
+    "Philosopher's Stone", "Ectoplasm", "Coffee Dripper",
+    "Mark of Pain", "Runic Dome",
+}
+_STATUS_CARDS = {"Wound", "Slimed", "Dazed", "Burn", "Void"}
+_CURSE_CARDS = {
+    "Curse of the Bell", "Regret", "Pain", "Shame", "Normality",
+    "Pride", "Writhe", "Parasite", "Clumsy", "Doubt", "Decay",
+    "Injury", "Necronomicurse",
+}
+
+
+# ---------------------------------------------------------------------------
+# 维度常量
+# ---------------------------------------------------------------------------
+_DA_FEATS_DIM     = 23  # deck_analysis_features: 3+12+5+3
+_ARCH_FEATS_DIM   = 13  # archetype_completion_features: 4+1+1+4+1+1+1
+_TEMPO_DIM        = 8
+_BOSS_CTX_DIM     = 6
+_REMOVE_CTX_DIM   = 3
+_REMOVE_FEATS_DIM = 2
+
+
+def deck_analysis_features(deck: list[str], relics: list[str] | None = None) -> np.ndarray:
+    """返回卡组+遗物上下文特征，共 _DA_FEATS_DIM=23 维。"""
+    relics = relics or []
+    deck_bases = [c.split("+")[0].strip() for c in deck]
+    energy_count = float(sum(1 for r in relics if r.strip() in _ENERGY_RELICS))
+    status_count = float(sum(1 for b in deck_bases if b in _STATUS_CARDS))
+    curse_count  = float(sum(1 for b in deck_bases if b in _CURSE_CARDS))
+    kw = deck_keyword_features(deck)
+    ar = deck_archetype_features(deck)
+    result = np.concatenate([
+        _deck_type_ratios(deck), kw, ar,
+        [energy_count, status_count, curse_count],
     ])
+    assert len(result) == _DA_FEATS_DIM, (
+        f"deck_analysis_features 维度错误: {len(result)} != {_DA_FEATS_DIM}。"
+        f"请检查 _KEYWORD_GROUPS({len(kw)}) / _ARCHETYPES({len(ar)}) 是否变动。"
+    )
+    return result
 
 
 def card_count_in_deck(card: str, deck: list[str]) -> float:
@@ -289,20 +324,21 @@ def relic_card_synergy_features(card: str, deck: list[str],
                                 relics: list[str]) -> np.ndarray:
     """计算候选卡与当前遗物的协同特征（9 维）。"""
     base = card.split("+")[0].strip()
-    relic_set = set(relics)
+    relic_set = {r.strip().lower() for r in relics}
     scores = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
     for i, (relic_name, card_set, _) in enumerate(_RELIC_CARD_SYNERGIES):
-        if relic_name in relic_set and base in card_set:
+        if relic_name.lower() in relic_set and base in card_set:
             scores[i] = 1.0
     return scores
 
 
 def relic_deck_synergy_features(relic: str, deck: list[str]) -> np.ndarray:
     """反向协同：候选遗物与卡组中卡牌的协同计数（9 维）。"""
+    relic_norm = relic.strip().lower()
     deck_bases = [c.split("+")[0].strip() for c in deck]
     scores = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
     for i, (relic_name, card_set, _) in enumerate(_RELIC_CARD_SYNERGIES):
-        if relic == relic_name:
+        if relic_norm == relic_name.lower():
             scores[i] = float(sum(1 for b in deck_bases if b in card_set))
     return scores
 
@@ -415,6 +451,13 @@ def _card_feature_row(base, da_feats, tempo, extra, synergy, relic_card_syn,
     """Card feature vector layout — single source of truth.
     All training and inference paths must call this function so feature
     order stays consistent automatically."""
+    assert len(da_feats)        == _DA_FEATS_DIM,              f"da_feats: {len(da_feats)} != {_DA_FEATS_DIM}"
+    assert len(tempo)           == _TEMPO_DIM,                  f"tempo: {len(tempo)} != {_TEMPO_DIM}"
+    assert len(extra)           == 5,                           f"card extra: {len(extra)} != 5"
+    assert len(synergy)         == len(_SYNERGY_PAIRS),         f"synergy: {len(synergy)} != {len(_SYNERGY_PAIRS)}"
+    assert len(relic_card_syn)  == len(_RELIC_CARD_SYNERGIES),  f"relic_card_syn: {len(relic_card_syn)} != {len(_RELIC_CARD_SYNERGIES)}"
+    assert len(archetype_feats) == _ARCH_FEATS_DIM,             f"archetype_feats: {len(archetype_feats)} != {_ARCH_FEATS_DIM}"
+    assert len(boss_feats)      == _BOSS_CTX_DIM,               f"boss_feats: {len(boss_feats)} != {_BOSS_CTX_DIM}"
     return np.concatenate([base, da_feats, tempo, extra, synergy, relic_card_syn,
                            archetype_feats, boss_feats, option_vec])
 
@@ -439,7 +482,7 @@ def build_card_ranking_data(db: dict, vocab: dict):
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
         is_boss = 1.0 if d.get("is_boss_reward", False) else 0.0
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics"])
         tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
         boss_feats = boss_context_features(d["act"], d.get("act1_boss", ""), d.get("act2_boss", ""))
         group_size = 0
@@ -486,7 +529,7 @@ def build_boss_relic_ranking_data(db: dict, vocab: dict):
             len(d["relics_before"]), d["deck"], d["relics_before"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics_before"])
         tempo = temporal_features(boss_floor, act, d["hp_pct"])
         group_size = 0
 
@@ -517,7 +560,7 @@ def build_campfire_ranking_data(db: dict, vocab: dict):
             len(d["relics"]), d["deck"], d["relics"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics"])
         tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
         hp_below_30 = 1.0 if d["hp_pct"] < 30 else 0.0
         hp_30_50 = 1.0 if 30 <= d["hp_pct"] < 50 else 0.0
@@ -548,7 +591,7 @@ def build_shop_ranking_data(db: dict, vocab: dict):
             len(d["relics"]), d["deck"], d["relics"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics"])
         tempo = temporal_features(d["floor"], d.get("act", 1), d["hp_pct"])
         gold = d.get("gold", 0)
         purchased_set = set(d.get("purchased", []))
@@ -594,7 +637,8 @@ def build_shop_ranking_data(db: dict, vocab: dict):
                 is_remove = 0.0
                 was_picked = item in purchased_set
 
-            remove_feats = np.array([is_remove], dtype=np.float32)
+            is_skip_flag = 1.0 if item == "不购买" else 0.0
+            remove_feats = np.array([is_remove, is_skip_flag], dtype=np.float32)
             rcs = relic_card_synergy_features(item, d["deck"], d["relics"])
             rds = relic_deck_synergy_features(item, d["deck"])
             row = np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec])
@@ -626,7 +670,7 @@ def build_card_choice_data(db: dict, vocab: dict):
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
         is_boss = 1.0 if d.get("is_boss_reward", False) else 0.0
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics"])
         tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
         boss_feats = boss_context_features(d["act"], d.get("act1_boss", ""), d.get("act2_boss", ""))
 
@@ -666,7 +710,7 @@ def build_boss_relic_choice_data(db: dict, vocab: dict):
             len(d["relics_before"]), d["deck"], d["relics_before"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics_before"])
         tempo = temporal_features(boss_floor, act, d["hp_pct"])
 
         for option in offered:
@@ -690,7 +734,7 @@ def build_campfire_choice_data(db: dict, vocab: dict):
             len(d["relics"]), d["deck"], d["relics"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics"])
         tempo = temporal_features(d["floor"], d["act"], d["hp_pct"])
         hp_below_30 = 1.0 if d["hp_pct"] < 30 else 0.0
         hp_30_50 = 1.0 if 30 <= d["hp_pct"] < 50 else 0.0
@@ -717,7 +761,7 @@ def build_shop_choice_data(db: dict, vocab: dict):
             len(d["relics"]), d["deck"], d["relics"], vocab,
             d.get("num_upgrades", 0), d.get("deck_upgrades", {})
         )
-        da_feats = deck_analysis_features(d["deck"])
+        da_feats = deck_analysis_features(d["deck"], d["relics"])
         tempo = temporal_features(d["floor"], d.get("act", 1), d["hp_pct"])
         gold = d.get("gold", 0)
         purchased_set = set(d.get("purchased", []))
@@ -762,7 +806,8 @@ def build_shop_choice_data(db: dict, vocab: dict):
                 is_remove = 0.0
                 was_picked = item in purchased_set
 
-            remove_feats = np.array([is_remove], dtype=np.float32)
+            is_skip_flag = 1.0 if item == "不购买" else 0.0
+            remove_feats = np.array([is_remove, is_skip_flag], dtype=np.float32)
             rcs = relic_card_synergy_features(item, d["deck"], d["relics"])
             rds = relic_deck_synergy_features(item, d["deck"])
             row = np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec])
@@ -1028,7 +1073,7 @@ def card_inference_features_v2(floor, act, hp_pct, deck, relics, options, stats,
     base = base_features(floor, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
                          num_upgrades, deck_upgrades)
     is_boss = 1.0 if floor in (16, 33) else 0.0
-    da_feats = deck_analysis_features(deck)
+    da_feats = deck_analysis_features(deck, relics)
     tempo = temporal_features(floor, act, hp_pct)
     boss_feats = boss_context_features(act, act1_boss, act2_boss)
     rows = []
@@ -1056,7 +1101,7 @@ def boss_relic_inference_features_v2(act, hp_pct, deck, relics, options, stats,
     boss_floor = {1: 16, 2: 33, 3: 50}.get(act, 16)
     base = base_features(boss_floor, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
                          num_upgrades, deck_upgrades)
-    da_feats = deck_analysis_features(deck)
+    da_feats = deck_analysis_features(deck, relics)
     tempo = temporal_features(boss_floor, act, hp_pct)
     rows = []
     for option in options:
@@ -1074,7 +1119,7 @@ def campfire_inference_features_v2(floor, act, hp_pct, deck, relics, vocab,
                                    num_upgrades=0, deck_upgrades=None):
     base = base_features(floor, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
                          num_upgrades, deck_upgrades)
-    da_feats = deck_analysis_features(deck)
+    da_feats = deck_analysis_features(deck, relics)
     tempo = temporal_features(floor, act, hp_pct)
     hp_below_30 = 1.0 if hp_pct < 30 else 0.0
     hp_30_50 = 1.0 if 30 <= hp_pct < 50 else 0.0
@@ -1093,7 +1138,7 @@ def shop_inference_features_v2(floor, act, hp_pct, gold, deck, relics, items, st
     relic_to_idx = vocab["relic_to_idx"]
     base = base_features(floor, act, hp_pct, len(deck), len(relics), deck, relics, vocab,
                          num_upgrades, deck_upgrades)
-    da_feats = deck_analysis_features(deck)
+    da_feats = deck_analysis_features(deck, relics)
     tempo = temporal_features(floor, act, hp_pct)
     remove_ctx = shop_remove_context(deck)
     rows = []
@@ -1105,7 +1150,7 @@ def shop_inference_features_v2(floor, act, hp_pct, gold, deck, relics, items, st
                           float(s.get("times_purchased", 0)), 1.0], dtype=np.float32)
         rcs = relic_card_synergy_features(item, deck, relics)
         rds = relic_deck_synergy_features(item, deck)
-        remove_feats = np.array([0.0], dtype=np.float32)
+        remove_feats = np.array([0.0, 0.0], dtype=np.float32)
         rows.append(np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec]))
 
     # REMOVE（移除卡牌）
@@ -1118,7 +1163,7 @@ def shop_inference_features_v2(floor, act, hp_pct, gold, deck, relics, items, st
     extra = np.array([gold, buy_wr, skip_wr, float(times_purchased), 1.0], dtype=np.float32)
     rcs = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
     rds = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
-    remove_feats = np.array([1.0], dtype=np.float32)
+    remove_feats = np.array([1.0, 0.0], dtype=np.float32)
     rows.append(np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec]))
 
     # 不购买
@@ -1127,7 +1172,7 @@ def shop_inference_features_v2(floor, act, hp_pct, gold, deck, relics, items, st
     extra = np.array([gold, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
     rcs = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
     rds = np.zeros(len(_RELIC_CARD_SYNERGIES), dtype=np.float32)
-    remove_feats = np.array([0.0], dtype=np.float32)
+    remove_feats = np.array([0.0, 1.0], dtype=np.float32)
     rows.append(np.concatenate([base, da_feats, tempo, extra, rcs, rds, remove_feats, remove_ctx, card_vec, relic_vec]))
 
     return np.array(rows)
